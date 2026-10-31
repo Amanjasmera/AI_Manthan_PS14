@@ -9,10 +9,14 @@ sys.path.insert(0, str(BACKEND_DIR))
 import numpy as np
 import cv2
 from fastapi.testclient import TestClient
+from sqlalchemy import inspect
 from app.main import app
+from app.database import engine, get_db, SessionLocal, init_db
+from app.models import Patient, Screening, Lesion, DoctorReview, ActiveLearningLog
 from app.core.iqa import ImageQualityAssessor, IqaErrorCode
 from app.core.classifier import DiabeticRetinopathyClassifier, ModelStatus
 from app.core.lesion_detector import MicrovasculatureLesionDetector
+from app.core.report_generator import PDFReportGenerator
 
 client = TestClient(app)
 
@@ -39,6 +43,44 @@ def make_test_retina_image(blur=False, dark=False, non_retinal=False):
         img = (img * 0.3).astype(np.uint8)
 
     return img
+
+def test_database_schema_and_tables():
+    """Validates that all 5 required tables exist with expected schema."""
+    init_db()
+    inspector = inspect(engine)
+    table_names = inspector.get_table_names()
+
+    required_tables = [
+        "patients",
+        "screenings",
+        "lesions",
+        "doctor_reviews",
+        "active_learning_logs"
+    ]
+    for table in required_tables:
+        assert table in table_names, f"Table '{table}' missing from SQLite database!"
+
+    # Verify key columns on screenings table
+    screening_columns = {col["name"] for col in inspector.get_columns("screenings")}
+    for col in [
+        "id", "patient_id", "eye_side", "raw_image_path", "preprocessed_image_path",
+        "iqa_passed", "blur_score", "illumination_score", "contrast_score",
+        "predicted_grade", "grade_name", "confidence", "referral_urgency", "status", "created_at"
+    ]:
+        assert col in screening_columns, f"Column '{col}' missing from 'screenings' table!"
+
+    # Verify key columns on lesions table
+    lesion_columns = {col["name"] for col in inspector.get_columns("lesions")}
+    for col in [
+        "screening_id", "microaneurysm_count", "hemorrhage_count",
+        "hard_exudate_count", "soft_exudate_count", "mask_url"
+    ]:
+        assert col in lesion_columns, f"Column '{col}' missing from 'lesions' table!"
+
+    # Verify key columns on active_learning_logs
+    al_columns = {col["name"] for col in inspector.get_columns("active_learning_logs")}
+    for col in ["screening_id", "verified_label", "dataset_tag", "updated_at"]:
+        assert col in al_columns, f"Column '{col}' missing from 'active_learning_logs' table!"
 
 def test_iqa_blur_detection():
     blurry_img = make_test_retina_image(blur=True)
@@ -115,6 +157,17 @@ def test_screening_analyze_api_flow():
     assert body["prediction"]["confidence_interval"] is None
     assert body["report_pdf_url"] is not None
 
+    # Verify 3-Tier Commercial Model & Risk Stratification
+    assert body["billing_status"] == "₹25 Valid Scan"
+    assert body["billing_amount"] == 25.0
+    assert "systemic_risk" in body
+    assert "next_screening_interval" in body
+    assert "bilingual_explanation" in body
+    assert len(body["bilingual_explanation"]["en"]) > 0
+    assert len(body["bilingual_explanation"]["hi"]) > 0
+
+    return body["id"]
+
 def test_screening_iqa_rejection_api_flow():
     blurry_img = make_test_retina_image(blur=True)
     _, enc = cv2.imencode(".jpg", blurry_img)
@@ -134,8 +187,66 @@ def test_screening_iqa_rejection_api_flow():
     assert body["referral_urgency"] == "RETAKE"
     assert body["status"] == "IQA_RETAKE"
 
+    # Verify Zero-Charge Billing Protection
+    assert body["billing_status"] == "₹0 Charged — Waived by IQA Gatekeeper"
+    assert body["billing_amount"] == 0.0
+    assert "Immediate Recapture" in body["next_screening_interval"]
+
+def test_doctor_review_and_active_learning_flow():
+    # Analyze a scan to get an active ID
+    img = make_test_retina_image()
+    _, enc = cv2.imencode(".jpg", img)
+    files = {"file": ("test_retina_dr.jpg", enc.tobytes(), "image/jpeg")}
+    data = {
+        "patient_name": "Active Learning Patient",
+        "age": 58,
+        "gender": "Female",
+        "eye_side": "LEFT",
+        "diabetes_history": "Type 2 Diabetes"
+    }
+    resp = client.post("/api/v1/screenings/analyze", files=files, data=data)
+    assert resp.status_code == 201
+    screening_id = resp.json()["id"]
+
+    # Submit Doctor Review with confirmed grade 2
+    review_payload = {
+        "doctor_name": "Dr. Ananya Roy",
+        "doctor_license": "MCI-IND-99882",
+        "confirmed_grade": 2,
+        "referral_recommendation": "Fundus Fluorescein Angiography & OCT",
+        "clinical_notes": "Early macular edema suspected. Confirmed Grade 2 NPDR."
+    }
+    rev_resp = client.post(f"/api/v1/screenings/{screening_id}/doctor-review", json=review_payload)
+    assert rev_resp.status_code == 200
+    rev_body = rev_resp.json()
+    assert rev_body["doctor_name"] == "Dr. Ananya Roy"
+    assert rev_body["confirmed_grade"] == 2
+
+    # Query active learning endpoint
+    al_resp = client.get("/api/v1/screenings/active-learning/logs?tag=Indore_Hub_v2")
+    assert al_resp.status_code == 200
+    al_logs = al_resp.json()
+    assert len(al_logs) > 0
+    matched = [log for log in al_logs if log["screening_id"] == screening_id]
+    assert len(matched) == 1
+    assert matched[0]["verified_label"] == 2
+    assert matched[0]["dataset_tag"] == "Indore_Hub_v2"
+
+def test_pdf_report_generator_from_db():
+    db = SessionLocal()
+    try:
+        first_s = db.query(Screening).first()
+        assert first_s is not None, "At least one screening should exist in DB"
+        pdf_path = PDFReportGenerator.generate_report(first_s.id, db=db)
+        assert os.path.exists(pdf_path)
+        assert os.path.getsize(pdf_path) > 1000  # Report generated with content
+    finally:
+        db.close()
+
 if __name__ == "__main__":
     print("Running integration tests directly...")
+    test_database_schema_and_tables()
+    print("Passed: test_database_schema_and_tables")
     test_iqa_blur_detection()
     print("Passed: test_iqa_blur_detection")
     test_iqa_underexposure_detection()
@@ -152,4 +263,8 @@ if __name__ == "__main__":
     print("Passed: test_screening_analyze_api_flow")
     test_screening_iqa_rejection_api_flow()
     print("Passed: test_screening_iqa_rejection_api_flow")
-    print("ALL INTEGRATION TESTS PASSED CLEANLY!")
+    test_doctor_review_and_active_learning_flow()
+    print("Passed: test_doctor_review_and_active_learning_flow")
+    test_pdf_report_generator_from_db()
+    print("Passed: test_pdf_report_generator_from_db")
+    print("\n>>> ALL 11 INTEGRATION TESTS PASSED 100% CLEANLY! <<<")

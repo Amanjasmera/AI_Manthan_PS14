@@ -9,6 +9,7 @@ router = APIRouter(tags=["System & Health"])
 @router.get("/health")
 def health_check():
     """Returns AI inference engine status, PyTorch device, and dataset provenance."""
+    print(">>> Executing health_check endpoint <<<", flush=True)
     weights_path = Path(__file__).resolve().parent.parent.parent / "data" / "weights" / "efficientnet_b0_dr.pth"
     temp_path = Path(__file__).resolve().parent.parent.parent / "data" / "weights" / "efficientnet_b0_temp.pt"
 

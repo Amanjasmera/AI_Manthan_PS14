@@ -2,15 +2,14 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from app.database import engine, Base
+from app.database import engine, Base, init_db
 from app.config import UPLOAD_DIR, REPORT_DIR
 from app.api.routes_screenings import router as screenings_router
 from app.api.routes_doctor import router as doctor_router
 from app.api.routes_health import router as health_router
-from app.utils.sample_data import generate_sample_cases_if_empty
 
 # Initialize SQLite database tables
-Base.metadata.create_all(bind=engine)
+init_db()
 
 app = FastAPI(
     title="RetinaVision-AI Diagnostic API",
@@ -40,7 +39,6 @@ def serve_file(filename: str):
     and lesion segmentation masks from the uploads directory.
     Sanitizes filename to prevent path traversal attacks.
     """
-    # Sanitize: only allow the basename, block path traversal
     safe_name = Path(filename).name
     if safe_name != filename or ".." in filename:
         raise HTTPException(status_code=400, detail="Invalid filename.")
@@ -49,7 +47,6 @@ def serve_file(filename: str):
     if not file_path.exists():
         raise HTTPException(status_code=404, detail=f"File not found: {safe_name}")
 
-    # Determine MIME type from extension
     suffix = file_path.suffix.lower()
     mime_map = {
         ".jpg": "image/jpeg",
@@ -62,10 +59,6 @@ def serve_file(filename: str):
     media_type = mime_map.get(suffix, "application/octet-stream")
     return FileResponse(str(file_path), media_type=media_type)
 
-@app.on_event("startup")
-def startup_event():
-    # Pre-seed initial benchmark screening records if database is fresh
-    generate_sample_cases_if_empty()
 
 @app.get("/")
 def root():
@@ -74,4 +67,3 @@ def root():
         "docs_url": "/docs",
         "api_v1": "/api/v1/health"
     }
-

@@ -3,6 +3,9 @@ node_modules/
 dist/
 dist-ssr/
 *.local
+vite.config.ts.timestamp*
+*.tsbuildinfo
+.npm
 
 # Python / Backend
 __pycache__/
@@ -14,19 +17,23 @@ env/
 venv/
 ENV/
 .venv/
+.pytest_cache/
+*.egg-info/
 
 # Database & Runtime Uploads
 *.db
+*.db-journal
+*.db-wal
+*.db-shm
 *.sqlite3
 backend/data/*.db
+backend/data/*.sqlite3
 backend/uploads/*_raw.jpg
 backend/uploads/*_prep.jpg
 backend/uploads/*_gradcam.jpg
 backend/uploads/*_mask.png
-backend/reports/*.pdf
-
-# Upstream Clone
-retina_care_ai_upstream/
+backend/reports/*
+!backend/reports/.gitkeep
 
 # Large Model Weights (>50MB resnet50 backup)
 backend/data/weights/resnet50_dr.pth
@@ -37,4 +44,3 @@ Thumbs.db
 .vscode/
 .idea/
 *.log
-

@@ -2,8 +2,8 @@ import cv2
 import numpy as np
 from pathlib import Path
 from app.config import UPLOAD_DIR
-from app.database import SessionLocal
-from app.models.schema import Screening, Patient
+from app.database import SessionLocal, init_db
+from app.models import Screening, Patient
 from app.services.screening_service import ScreeningService
 
 def create_synthetic_retina_image(
@@ -108,8 +108,7 @@ def create_synthetic_retina_image(
 
 def generate_sample_cases_if_empty():
     """Initializes sample database cases with both normal and pathological examples."""
-    from app.database import engine, Base
-    Base.metadata.create_all(bind=engine)
+    init_db()
     db = SessionLocal()
     try:
         count = db.query(Screening).count()

@@ -9,9 +9,10 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.config import UPLOAD_DIR, REPORT_DIR
-from app.models.schema import Screening, Patient, ScreeningDetailResponse, IqaResult
+from app.models import Screening, Patient, ScreeningDetailResponse, IqaResult
 from app.services.screening_service import ScreeningService
 from app.core.iqa import ImageQualityAssessor
+from app.core.report_generator import PDFReportGenerator
 
 router = APIRouter(prefix="/screenings", tags=["Screenings"])
 service = ScreeningService()
@@ -37,10 +38,10 @@ async def analyze_retinal_image(
     Primary Retinal Screening Intake:
     1. Validates file header and dimensions.
     2. Runs OpenCV Image Quality Assessment (IQA Gate).
-       - Rejects poor quality images early (IMAGE_TOO_BLURRY, IMAGE_UNDEREXPOSED, NON_RETINAL_IMAGE).
+       - Zero-Charge Billing Protection: Waives fee (₹0 Charged) on poor quality / blurry scans.
     3. Runs non-blocking PyTorch EfficientNet-B0 inference off the main event loop.
     4. Computes Grad-CAM explainability and segments microvascular anomalies.
-    5. Generates bilingual clinical PDF report.
+    5. Generates bilingual clinical PDF report and saves structured database records.
     """
     if file.content_type and file.content_type not in ALLOWED_MIME_TYPES:
         raise HTTPException(
@@ -129,6 +130,11 @@ def list_screenings(
         p = s.patient
         pred = s.prediction
         doctor = s.doctor_review
+        
+        grade_val = pred.predicted_grade if pred else (s.predicted_grade if s.predicted_grade is not None else 0)
+        grade_str = pred.grade_name if pred else (s.grade_name or ("Retake Required" if not s.iqa_passed else "N/A"))
+        conf_val = pred.confidence if pred else (s.confidence or 0.0)
+
         items.append({
             "id": s.id,
             "patient_name": p.full_name,
@@ -136,13 +142,16 @@ def list_screenings(
             "gender": p.gender,
             "eye_side": s.eye_side,
             "iqa_passed": s.iqa_passed,
-            "predicted_grade": pred.predicted_grade if pred else 0,
-            "grade_name": pred.grade_name if pred else ("Retake Required" if not s.iqa_passed else "N/A"),
-            "confidence": pred.confidence if pred else 0.0,
+            "predicted_grade": grade_val,
+            "grade_name": grade_str,
+            "confidence": conf_val,
             "referral_urgency": s.referral_urgency,
             "status": s.status,
             "confirmed_grade": doctor.confirmed_grade if doctor else None,
-            "created_at": s.created_at.isoformat()
+            "created_at": s.created_at.isoformat(),
+            "billing_status": s.billing_status or ("₹0 Charged — Waived by IQA Gatekeeper" if not s.iqa_passed else "₹25 Valid Scan"),
+            "systemic_risk": s.systemic_risk or "Low Systemic Risk",
+            "next_screening_interval": s.next_screening_interval or "12 Months"
         })
 
     return {
@@ -173,9 +182,7 @@ def download_screening_report(screening_id: str, db: Session = Depends(get_db)):
     pdf_path = REPORT_DIR / pdf_filename
 
     if not pdf_path.exists():
-        screening_dict = service.get_screening_dict(db, screening_id)
-        from app.services.pdf_report import PDFReportGenerator
-        PDFReportGenerator.generate_report(screening_dict, pdf_filename)
+        PDFReportGenerator.generate_report(screening_id, pdf_filename, db=db)
 
     return FileResponse(
         str(pdf_path),

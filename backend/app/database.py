@@ -17,3 +17,9 @@ def get_db():
     finally:
         db.close()
 
+def init_db():
+    """
+    Initializes production SQLite database schema for all models.
+    """
+    import app.models  # Ensures all tables are imported into Base.metadata
+    Base.metadata.create_all(bind=engine)
