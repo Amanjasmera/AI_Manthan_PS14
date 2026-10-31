@@ -184,9 +184,9 @@ class PDFReportGenerator:
         # =====================================================================
         # 2. PATIENT DEMOGRAPHICS & CLINICAL CONTEXT
         # =====================================================================
-        patient = screening_data.get("patient", {})
-        iqa = screening_data.get("iqa", {})
-        iqa_passed = iqa.get("passed", False)
+        patient = screening_data.get("patient") or {}
+        iqa = screening_data.get("iqa") or {}
+        iqa_passed = bool(iqa.get("passed", False))
 
         patient_data = [
             [
@@ -348,7 +348,7 @@ class PDFReportGenerator:
         prep_path = screening_data.get("preprocessed_image_path")
         pred = screening_data.get("prediction") or {}
         gradcam_path = pred.get("gradcam_path")
-        mask_path = screening_data.get("lesions", {}).get("mask_path")
+        mask_path = (screening_data.get("lesions") or {}).get("mask_path")
 
         def safe_image(path_str):
             if path_str and Path(path_str).exists():
@@ -404,7 +404,17 @@ class PDFReportGenerator:
             ],
             [
                 Paragraph("<b>Model Provenance & Active Learning:</b>", bold_style),
-                Paragraph(f"{pred.get('model_provenance', 'EfficientNet-B0')} | Active Learning Dataset Tag: <b>Indore_Hub_v2</b> | Entropy: {pred.get('entropy', 0.0):.3f} | Temp: {pred.get('temperature', 1.0):.2f}", body_style)
+                Paragraph(f"{pred.get('model_provenance', 'EfficientNet-B0')} | Active Learning Dataset Tag: <b>Indore_Hub_v2</b> | Temp: {pred.get('temperature', 1.0):.2f}", body_style)
+            ],
+            [
+                Paragraph("<b>Bayesian Uncertainty & Safety Gate:</b>", bold_style),
+                Paragraph(
+                    f"Predictive Entropy: <b>{pred.get('uncertainty_score', pred.get('entropy', 0.0)):.3f}</b> (Safe Threshold: 0.500) | "
+                    f"Epistemic: <b>{pred.get('epistemic_uncertainty', 0.0):.3f}</b> | "
+                    f"Aleatoric: <b>{pred.get('aleatoric_uncertainty', 0.0):.3f}</b> | "
+                    f"Status: <b><font color='{'#D97706' if (screening_data.get('requires_manual_doctor_review') or pred.get('requires_manual_doctor_review')) else '#059669'}'>{'⚠️ MANUAL DOCTOR REVIEW REQUIRED' if (screening_data.get('requires_manual_doctor_review') or pred.get('requires_manual_doctor_review')) else 'Auto-Approved (Low Uncertainty)'}</font></b>",
+                    body_style
+                )
             ]
         ], colWidths=[185, 365])
         metrics_table.setStyle(TableStyle([
@@ -459,3 +469,4 @@ class PDFReportGenerator:
 
         doc.build(elements)
         return str(pdf_path)
+

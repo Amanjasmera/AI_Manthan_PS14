@@ -10,6 +10,7 @@ from app.models import Patient, Screening, Prediction, Lesion, AuditLog, DoctorR
 from app.core.iqa import ImageQualityAssessor
 from app.core.preprocessor import RetinalPreprocessor
 from app.core.classifier import DiabeticRetinopathyClassifier, ModelStatus
+from app.services.inference import RetinalInferencePipeline
 from app.core.gradcam import generate_gradcam_visuals
 from app.core.lesion_detector import MicrovasculatureLesionDetector
 from app.core.triage import get_triage_info, get_iqa_rejection_triage
@@ -18,6 +19,7 @@ from app.core.report_generator import PDFReportGenerator
 class ScreeningService:
     def __init__(self):
         self.classifier = DiabeticRetinopathyClassifier()
+        self.inference_pipeline = RetinalInferencePipeline(classifier=self.classifier)
 
     def process_screening(
         self,
@@ -146,8 +148,8 @@ class ScreeningService:
         lesion_data, overlay_bgra, combined_mask = MicrovasculatureLesionDetector.detect_lesions(display_bgr)
         cv2.imwrite(str(mask_path), overlay_bgra)
 
-        # Deep Learning Classification (PyTorch EfficientNet-B0)
-        prediction_result = self.classifier.predict(model_rgb_160, suspected_lesions=lesion_data)
+        # Deep Learning Classification with Bayesian MC Dropout Uncertainty Estimation
+        prediction_result = self.inference_pipeline.run_inference(model_rgb_160, suspected_lesions=lesion_data)
         grade = prediction_result["predicted_grade"]
 
         # Grad-CAM Explainability on target layer
@@ -167,6 +169,20 @@ class ScreeningService:
         # Clinical Triage Matrix
         triage = get_triage_info(grade)
 
+        # Uncertainty Extraction & Clinical Safety Gating
+        uncertainty_score = float(prediction_result.get("uncertainty_score", prediction_result.get("entropy", 0.0)))
+        requires_manual_doctor_review = bool(prediction_result.get("requires_manual_doctor_review", False))
+
+        # Enforce clinical validation: if uncertainty exceeds safe threshold (entropy > 0.50),
+        # prevent automated diagnosis from being finalized without doctor review.
+        referral_urgency = triage["urgency"]
+        if requires_manual_doctor_review:
+            screening_status = "DOCTOR_REVIEW_REQUIRED"
+            if referral_urgency == "ROUTINE":
+                referral_urgency = "NON_URGENT"
+        else:
+            screening_status = "ANALYZED"
+
         # Persist Screening Record
         screening = Screening(
             id=screening_id,
@@ -185,8 +201,10 @@ class ScreeningService:
             predicted_grade=grade,
             grade_name=prediction_result["grade_name"],
             confidence=prediction_result["confidence"],
-            referral_urgency=triage["urgency"],
-            status="ANALYZED",
+            uncertainty_score=uncertainty_score,
+            requires_manual_doctor_review=requires_manual_doctor_review,
+            referral_urgency=referral_urgency,
+            status=screening_status,
             billing_status="₹25 Valid Scan",
             billing_amount=25.0,
             systemic_risk=triage["systemic_risk"],
@@ -202,6 +220,10 @@ class ScreeningService:
             confidence=prediction_result["confidence"],
             class_probabilities=prediction_result["class_probabilities"],
             entropy=prediction_result["entropy"],
+            uncertainty_score=uncertainty_score,
+            requires_manual_doctor_review=requires_manual_doctor_review,
+            epistemic_uncertainty=prediction_result.get("epistemic_uncertainty", 0.0),
+            aleatoric_uncertainty=prediction_result.get("aleatoric_uncertainty", 0.0),
             confidence_interval=prediction_result["confidence_interval"],
             inference_time_ms=prediction_result["inference_time_ms"],
             temperature=prediction_result["temperature"],
@@ -226,10 +248,11 @@ class ScreeningService:
         )
         db.add(lesion_record)
 
+        safety_note = " [BAYESIAN ALERT: Entropy > 0.50 -> Auto-approval blocked, Doctor review mandated]" if requires_manual_doctor_review else " [Auto-Approved]"
         audit = AuditLog(
             screening_id=screening_id,
             event_type="SCREENING_COMPLETE",
-            details=f"Analyzed in {prediction_result['inference_time_ms']}ms: Grade {grade} ({prediction_result['grade_name']}). Billed ₹25."
+            details=f"Analyzed in {prediction_result['inference_time_ms']}ms: Grade {grade} ({prediction_result['grade_name']}). Uncertainty: {uncertainty_score:.4f}{safety_note}. Billed ₹25."
         )
         db.add(audit)
 
@@ -318,6 +341,10 @@ class ScreeningService:
                 "confidence": pred.confidence if pred else (screening.confidence or 0.0),
                 "class_probabilities": pred.class_probabilities if pred else {},
                 "entropy": pred.entropy if pred else 0.0,
+                "uncertainty_score": round(pred.uncertainty_score, 4) if pred and hasattr(pred, "uncertainty_score") and pred.uncertainty_score is not None else (round(pred.entropy, 4) if pred else 0.0),
+                "requires_manual_doctor_review": bool(pred.requires_manual_doctor_review) if pred and hasattr(pred, "requires_manual_doctor_review") else False,
+                "epistemic_uncertainty": round(pred.epistemic_uncertainty, 4) if pred and hasattr(pred, "epistemic_uncertainty") and pred.epistemic_uncertainty is not None else 0.0,
+                "aleatoric_uncertainty": round(pred.aleatoric_uncertainty, 4) if pred and hasattr(pred, "aleatoric_uncertainty") and pred.aleatoric_uncertainty is not None else 0.0,
                 "confidence_interval": pred.confidence_interval if pred else None,
                 "inference_time_ms": pred.inference_time_ms if pred else 0.0,
                 "temperature": pred.temperature if pred else 1.0,
@@ -348,6 +375,8 @@ class ScreeningService:
             } if doctor else None,
             "referral_urgency": screening.referral_urgency,
             "status": screening.status,
+            "uncertainty_score": round(screening.uncertainty_score, 4) if hasattr(screening, "uncertainty_score") and screening.uncertainty_score is not None else 0.0,
+            "requires_manual_doctor_review": bool(screening.requires_manual_doctor_review) if hasattr(screening, "requires_manual_doctor_review") else False,
             "created_at": screening.created_at.isoformat(),
             "report_pdf_url": f"/api/v1/screenings/{screening.id}/report.pdf",
             "billing_status": billing_status,

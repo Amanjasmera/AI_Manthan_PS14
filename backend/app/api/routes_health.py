@@ -39,6 +39,14 @@ def health_check():
             "model_status": "VERIFIED_TRAINED_CHECKPOINT" if weights_present else "MODEL_UNAVAILABLE",
             "calibrated_temperature": round(temperature_val, 4)
         },
+        "bayesian_deep_learning": {
+            "mc_dropout_enabled": True,
+            "standards_reference": "OATML BDL Benchmarks (https://github.com/OATML/bdl-benchmarks.git)",
+            "safe_entropy_threshold": 0.50,
+            "epistemic_uncertainty_decomposition": True,
+            "aleatoric_uncertainty_decomposition": True,
+            "clinical_safety_gate": "requires_manual_doctor_review (Enforced when entropy > 0.50)"
+        },
         "datasets_supported": [
             "APTOS 2019 Blindness Detection (n=3662)",
             "IDRiD (Indian Diabetic Retinopathy Image Dataset)",

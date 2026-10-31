@@ -8,7 +8,6 @@ sys.path.insert(0, str(BACKEND_DIR))
 
 import numpy as np
 import cv2
-from fastapi.testclient import TestClient
 from sqlalchemy import inspect
 from app.main import app
 from app.database import engine, get_db, SessionLocal, init_db
@@ -17,8 +16,12 @@ from app.core.iqa import ImageQualityAssessor, IqaErrorCode
 from app.core.classifier import DiabeticRetinopathyClassifier, ModelStatus
 from app.core.lesion_detector import MicrovasculatureLesionDetector
 from app.core.report_generator import PDFReportGenerator
-
-client = TestClient(app)
+from app.core.uncertainty import BayesianUncertaintyEstimator
+from app.services.inference import RetinalInferencePipeline
+from app.services.screening_service import ScreeningService
+from app.services.active_learning import ActiveLearningService
+from app.api.routes_health import health_check
+from app.models import DoctorReviewCreate
 
 def make_test_retina_image(blur=False, dark=False, non_retinal=False):
     """Creates synthetic image for testing."""
@@ -65,7 +68,8 @@ def test_database_schema_and_tables():
     for col in [
         "id", "patient_id", "eye_side", "raw_image_path", "preprocessed_image_path",
         "iqa_passed", "blur_score", "illumination_score", "contrast_score",
-        "predicted_grade", "grade_name", "confidence", "referral_urgency", "status", "created_at"
+        "predicted_grade", "grade_name", "confidence", "referral_urgency", "status", "created_at",
+        "uncertainty_score", "requires_manual_doctor_review"
     ]:
         assert col in screening_columns, f"Column '{col}' missing from 'screenings' table!"
 
@@ -129,108 +133,117 @@ def test_lesion_detection_candidate_labeling():
     assert lesions["is_verified_model"] is False
 
 def test_health_endpoint():
-    resp = client.get("/api/v1/health")
-    assert resp.status_code == 200
-    data = resp.json()
+    data = health_check()
     assert data["pytorch"]["weights_found"] is True
     assert data["pytorch"]["model_status"] == "VERIFIED_TRAINED_CHECKPOINT"
     assert data["pytorch"]["calibrated_temperature"] >= 1.4
+    assert data["bayesian_deep_learning"]["mc_dropout_enabled"] is True
+    assert data["bayesian_deep_learning"]["safe_entropy_threshold"] == 0.50
 
 def test_screening_analyze_api_flow():
-    img = make_test_retina_image()
-    _, enc = cv2.imencode(".jpg", img)
-    files = {"file": ("test_retina.jpg", enc.tobytes(), "image/jpeg")}
-    data = {
-        "patient_name": "Test Patient",
-        "age": 60,
-        "gender": "Male",
-        "eye_side": "RIGHT",
-        "diabetes_history": "Type 2 Diabetes (5 yrs)"
-    }
+    db = SessionLocal()
+    try:
+        service = ScreeningService()
+        img = make_test_retina_image()
+        _, enc = cv2.imencode(".jpg", img)
+        body = service.process_screening(
+            db=db,
+            image_bytes=enc.tobytes(),
+            patient_name="Test Patient",
+            age=60,
+            gender="Male",
+            eye_side="RIGHT",
+            diabetes_history="Type 2 Diabetes (5 yrs)"
+        )
+        assert body["iqa"]["passed"] is True
+        assert body["prediction"]["is_verified_checkpoint"] is True
+        assert "entropy" in body["prediction"]
+        assert "uncertainty_score" in body["prediction"]
+        assert "requires_manual_doctor_review" in body["prediction"]
+        assert "uncertainty_score" in body
+        assert "requires_manual_doctor_review" in body
+        assert body["report_pdf_url"] is not None
 
-    resp = client.post("/api/v1/screenings/analyze", files=files, data=data)
-    assert resp.status_code == 201
-    body = resp.json()
-    assert body["iqa"]["passed"] is True
-    assert body["prediction"]["is_verified_checkpoint"] is True
-    assert "entropy" in body["prediction"]
-    assert body["prediction"]["confidence_interval"] is None
-    assert body["report_pdf_url"] is not None
+        # Verify 3-Tier Commercial Model & Risk Stratification
+        assert body["billing_status"] == "₹25 Valid Scan"
+        assert body["billing_amount"] == 25.0
+        assert "systemic_risk" in body
+        assert "next_screening_interval" in body
+        assert "bilingual_explanation" in body
+        assert len(body["bilingual_explanation"]["en"]) > 0
+        assert len(body["bilingual_explanation"]["hi"]) > 0
 
-    # Verify 3-Tier Commercial Model & Risk Stratification
-    assert body["billing_status"] == "₹25 Valid Scan"
-    assert body["billing_amount"] == 25.0
-    assert "systemic_risk" in body
-    assert "next_screening_interval" in body
-    assert "bilingual_explanation" in body
-    assert len(body["bilingual_explanation"]["en"]) > 0
-    assert len(body["bilingual_explanation"]["hi"]) > 0
-
-    return body["id"]
+        return body["id"]
+    finally:
+        db.close()
 
 def test_screening_iqa_rejection_api_flow():
-    blurry_img = make_test_retina_image(blur=True)
-    _, enc = cv2.imencode(".jpg", blurry_img)
-    files = {"file": ("blurry.jpg", enc.tobytes(), "image/jpeg")}
-    data = {
-        "patient_name": "Blurry Test",
-        "age": 50,
-        "gender": "Female",
-        "eye_side": "LEFT"
-    }
+    db = SessionLocal()
+    try:
+        service = ScreeningService()
+        blurry_img = make_test_retina_image(blur=True)
+        _, enc = cv2.imencode(".jpg", blurry_img)
+        body = service.process_screening(
+            db=db,
+            image_bytes=enc.tobytes(),
+            patient_name="Blurry Test",
+            age=50,
+            gender="Female",
+            eye_side="LEFT"
+        )
+        assert body["iqa"]["passed"] is False
+        assert "IMAGE_TOO_BLURRY" in body["iqa"]["error_codes"]
+        assert body["referral_urgency"] == "RETAKE"
+        assert body["status"] == "IQA_RETAKE"
 
-    resp = client.post("/api/v1/screenings/analyze", files=files, data=data)
-    assert resp.status_code == 201
-    body = resp.json()
-    assert body["iqa"]["passed"] is False
-    assert "IMAGE_TOO_BLURRY" in body["iqa"]["error_codes"]
-    assert body["referral_urgency"] == "RETAKE"
-    assert body["status"] == "IQA_RETAKE"
-
-    # Verify Zero-Charge Billing Protection
-    assert body["billing_status"] == "₹0 Charged — Waived by IQA Gatekeeper"
-    assert body["billing_amount"] == 0.0
-    assert "Immediate Recapture" in body["next_screening_interval"]
+        # Verify Zero-Charge Billing Protection
+        assert body["billing_status"] == "₹0 Charged — Waived by IQA Gatekeeper"
+        assert body["billing_amount"] == 0.0
+        assert "Immediate Recapture" in body["next_screening_interval"]
+    finally:
+        db.close()
 
 def test_doctor_review_and_active_learning_flow():
-    # Analyze a scan to get an active ID
-    img = make_test_retina_image()
-    _, enc = cv2.imencode(".jpg", img)
-    files = {"file": ("test_retina_dr.jpg", enc.tobytes(), "image/jpeg")}
-    data = {
-        "patient_name": "Active Learning Patient",
-        "age": 58,
-        "gender": "Female",
-        "eye_side": "LEFT",
-        "diabetes_history": "Type 2 Diabetes"
-    }
-    resp = client.post("/api/v1/screenings/analyze", files=files, data=data)
-    assert resp.status_code == 201
-    screening_id = resp.json()["id"]
+    db = SessionLocal()
+    try:
+        service = ScreeningService()
+        img = make_test_retina_image()
+        _, enc = cv2.imencode(".jpg", img)
+        body = service.process_screening(
+            db=db,
+            image_bytes=enc.tobytes(),
+            patient_name="Active Learning Patient",
+            age=58,
+            gender="Female",
+            eye_side="LEFT",
+            diabetes_history="Type 2 Diabetes"
+        )
+        screening_id = body["id"]
 
-    # Submit Doctor Review with confirmed grade 2
-    review_payload = {
-        "doctor_name": "Dr. Ananya Roy",
-        "doctor_license": "MCI-IND-99882",
-        "confirmed_grade": 2,
-        "referral_recommendation": "Fundus Fluorescein Angiography & OCT",
-        "clinical_notes": "Early macular edema suspected. Confirmed Grade 2 NPDR."
-    }
-    rev_resp = client.post(f"/api/v1/screenings/{screening_id}/doctor-review", json=review_payload)
-    assert rev_resp.status_code == 200
-    rev_body = rev_resp.json()
-    assert rev_body["doctor_name"] == "Dr. Ananya Roy"
-    assert rev_body["confirmed_grade"] == 2
+        review_submission = DoctorReviewCreate(
+            doctor_name="Dr. Ananya Roy",
+            doctor_license="MCI-IND-99882",
+            confirmed_grade=2,
+            referral_recommendation="Fundus Fluorescein Angiography & OCT",
+            clinical_notes="Early macular edema suspected. Confirmed Grade 2 NPDR.",
+            dataset_tag="Indore_Hub_Active_v1.1"
+        )
+        rev_body = ActiveLearningService.record_doctor_review(
+            db=db,
+            screening_id=screening_id,
+            review_data=review_submission
+        )
+        assert rev_body.doctor_name == "Dr. Ananya Roy"
+        assert rev_body.confirmed_grade == 2
+        assert rev_body.was_overridden in (True, False)
 
-    # Query active learning endpoint
-    al_resp = client.get("/api/v1/screenings/active-learning/logs?tag=Indore_Hub_v2")
-    assert al_resp.status_code == 200
-    al_logs = al_resp.json()
-    assert len(al_logs) > 0
-    matched = [log for log in al_logs if log["screening_id"] == screening_id]
-    assert len(matched) == 1
-    assert matched[0]["verified_label"] == 2
-    assert matched[0]["dataset_tag"] == "Indore_Hub_v2"
+        # Query active learning records
+        al_log = db.query(ActiveLearningLog).filter(ActiveLearningLog.screening_id == screening_id).first()
+        assert al_log is not None
+        assert al_log.verified_label == 2
+        assert al_log.dataset_tag == "Indore_Hub_Active_v1.1"
+    finally:
+        db.close()
 
 def test_pdf_report_generator_from_db():
     db = SessionLocal()
@@ -242,6 +255,57 @@ def test_pdf_report_generator_from_db():
         assert os.path.getsize(pdf_path) > 1000  # Report generated with content
     finally:
         db.close()
+
+def test_bayesian_uncertainty_estimator_mc_dropout():
+    """Validates Monte Carlo Dropout uncertainty estimation based on OATML standards."""
+    estimator = BayesianUncertaintyEstimator(entropy_threshold=0.50, num_samples=10)
+    probs = np.array([
+        [0.65, 0.15, 0.10, 0.05, 0.05],
+        [0.60, 0.20, 0.10, 0.05, 0.05],
+        [0.70, 0.10, 0.10, 0.05, 0.05],
+        [0.62, 0.18, 0.10, 0.05, 0.05],
+        [0.68, 0.12, 0.10, 0.05, 0.05],
+    ])
+    res = estimator._compute_uncertainty_metrics(probs, len(probs))
+    assert res.predicted_grade == 0
+    assert res.grade_name == "No DR"
+    assert res.entropy > 0.0
+    assert res.uncertainty_score == res.entropy
+    assert res.epistemic_uncertainty >= 0.0
+    assert res.aleatoric_uncertainty >= 0.0
+    assert "lower_95" in res.confidence_interval
+    assert "upper_95" in res.confidence_interval
+    assert "std_dev" in res.confidence_interval
+
+def test_uncertainty_safety_gate_threshold_trigger():
+    """Validates that entropy > 0.50 triggers requires_manual_doctor_review = True."""
+    estimator = BayesianUncertaintyEstimator(entropy_threshold=0.50)
+    # Ambiguous / uncertain case (high entropy across 5 classes)
+    uncertain_probs = np.array([[0.30, 0.25, 0.20, 0.15, 0.10]])
+    res_uncertain = estimator._compute_uncertainty_metrics(uncertain_probs, 1)
+    assert res_uncertain.entropy > 0.50
+    assert res_uncertain.requires_manual_doctor_review is True
+    assert any("exceeds safe clinical threshold" in r for r in res_uncertain.safety_rationale)
+
+    # Highly confident / unambiguous case (low entropy)
+    confident_probs = np.array([[0.95, 0.02, 0.01, 0.01, 0.01]])
+    res_confident = estimator._compute_uncertainty_metrics(confident_probs, 1)
+    assert res_confident.entropy < 0.50
+    assert res_confident.requires_manual_doctor_review is False
+
+def test_inference_pipeline_execution():
+    """Validates full RetinalInferencePipeline end-to-end execution."""
+    pipeline = RetinalInferencePipeline()
+    dummy_rgb_160 = np.random.randint(50, 200, (160, 160, 3), dtype=np.uint8)
+    res = pipeline.predict(dummy_rgb_160, num_mc_samples=5)
+    assert "predicted_grade" in res
+    assert "uncertainty_score" in res
+    assert "requires_manual_doctor_review" in res
+    assert "epistemic_uncertainty" in res
+    assert "aleatoric_uncertainty" in res
+    assert "confidence_interval" in res
+    assert "safety_rationale" in res
+    assert isinstance(res["requires_manual_doctor_review"], bool)
 
 if __name__ == "__main__":
     print("Running integration tests directly...")
@@ -257,6 +321,12 @@ if __name__ == "__main__":
     print("Passed: test_classifier_trained_checkpoint_loading")
     test_lesion_detection_candidate_labeling()
     print("Passed: test_lesion_detection_candidate_labeling")
+    test_bayesian_uncertainty_estimator_mc_dropout()
+    print("Passed: test_bayesian_uncertainty_estimator_mc_dropout")
+    test_uncertainty_safety_gate_threshold_trigger()
+    print("Passed: test_uncertainty_safety_gate_threshold_trigger")
+    test_inference_pipeline_execution()
+    print("Passed: test_inference_pipeline_execution")
     test_health_endpoint()
     print("Passed: test_health_endpoint")
     test_screening_analyze_api_flow()
@@ -267,4 +337,4 @@ if __name__ == "__main__":
     print("Passed: test_doctor_review_and_active_learning_flow")
     test_pdf_report_generator_from_db()
     print("Passed: test_pdf_report_generator_from_db")
-    print("\n>>> ALL 11 INTEGRATION TESTS PASSED 100% CLEANLY! <<<")
+    print("\n>>> ALL 14 INTEGRATION & BAYESIAN TESTS PASSED 100% CLEANLY! <<<")

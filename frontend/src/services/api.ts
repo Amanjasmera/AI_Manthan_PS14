@@ -57,6 +57,7 @@ export async function submitDoctorReview(
     confirmed_grade: number;
     referral_recommendation?: string;
     clinical_notes?: string;
+    dataset_tag?: string;
   }
 ): Promise<DoctorReview> {
   const res = await fetch(`${API_BASE}/screenings/${screeningId}/doctor-review`, {
@@ -71,6 +72,24 @@ export async function submitDoctorReview(
   return res.json();
 }
 
+export async function getActiveLearningStats(tag?: string): Promise<any> {
+  const url = tag ? `${API_BASE}/active-learning/stats?tag=${encodeURIComponent(tag)}` : `${API_BASE}/active-learning/stats`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error('Failed to fetch active learning stats');
+  }
+  return res.json();
+}
+
+export async function exportActiveLearningManifest(tag?: string): Promise<any> {
+  const url = tag ? `${API_BASE}/active-learning/export?tag=${encodeURIComponent(tag)}` : `${API_BASE}/active-learning/export`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error('Failed to export active learning manifest');
+  }
+  return res.json();
+}
+
 export async function getSystemHealth(): Promise<SystemHealth> {
   const res = await fetch(`${API_BASE}/health`);
   if (!res.ok) {
@@ -78,4 +97,3 @@ export async function getSystemHealth(): Promise<SystemHealth> {
   }
   return res.json();
 }
-

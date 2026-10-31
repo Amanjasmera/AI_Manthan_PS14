@@ -7,6 +7,7 @@ from app.config import UPLOAD_DIR, REPORT_DIR
 from app.api.routes_screenings import router as screenings_router
 from app.api.routes_doctor import router as doctor_router
 from app.api.routes_health import router as health_router
+from app.routers.reviews import router as reviews_router
 
 # Initialize SQLite database tables
 init_db()
@@ -30,6 +31,7 @@ app.add_middleware(
 app.include_router(screenings_router, prefix="/api/v1")
 app.include_router(doctor_router, prefix="/api/v1")
 app.include_router(health_router, prefix="/api/v1")
+app.include_router(reviews_router, prefix="/api/v1")
 
 
 @app.get("/api/v1/files/{filename}", summary="Serve uploaded images and generated overlays")

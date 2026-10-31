@@ -1,0 +1,123 @@
+"""
+RetinaVision-AI: Doctor Review & Active Learning API Router
+Endpoints for ophthalmologist verification sign-offs, Active Learning
+dataset versioning (Indore_Hub_Active_v1.1), and PyTorch fine-tuning export.
+"""
+
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+from app.models import (
+    DoctorReviewCreate,
+    DoctorReviewResponse,
+    ActiveLearningLogResponse,
+    ActiveLearningLog,
+)
+from app.services.active_learning import (
+    ActiveLearningService,
+    DEFAULT_DATASET_VERSION_TAG,
+)
+
+router = APIRouter(tags=["Doctor Review & Active Learning"])
+
+
+@router.post(
+    "/screenings/{screening_id}/doctor-review",
+    response_model=DoctorReviewResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Submit Ophthalmologist Review & Active Learning Sign-Off"
+)
+def submit_doctor_review(
+    screening_id: str,
+    review_data: DoctorReviewCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    Submits a clinician's expert evaluation, confirming or overriding the AI grade.
+    Automatically logs into `active_learning_logs` and `doctor_reviews` tables,
+    tagging the record with `Indore_Hub_Active_v1.1` for model fine-tuning.
+    """
+    try:
+        review = ActiveLearningService.record_doctor_review(
+            db=db,
+            screening_id=screening_id,
+            review_data=review_data,
+            dataset_tag=review_data.dataset_tag or DEFAULT_DATASET_VERSION_TAG
+        )
+        return review
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Review submission failed: {str(e)}")
+
+
+@router.post(
+    "/reviews/{screening_id}",
+    response_model=DoctorReviewResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Alias: Submit Doctor Review"
+)
+def submit_doctor_review_alias(
+    screening_id: str,
+    review_data: DoctorReviewCreate,
+    db: Session = Depends(get_db)
+):
+    """Direct alias endpoint for submitting doctor review."""
+    return submit_doctor_review(screening_id, review_data, db)
+
+
+@router.get(
+    "/active-learning/stats",
+    summary="Get Active Learning Dataset Statistics & Retraining Readiness"
+)
+def get_active_learning_stats(
+    tag: Optional[str] = Query(None, description="Optional dataset tag filter (e.g., Indore_Hub_Active_v1.1)"),
+    db: Session = Depends(get_db)
+):
+    """
+    Returns aggregate statistics of clinician-verified active learning data:
+    sample counts, override rate, class distribution, and PyTorch fine-tuning readiness.
+    """
+    return ActiveLearningService.get_dataset_statistics(db=db, dataset_tag=tag)
+
+
+@router.get(
+    "/active-learning/logs",
+    response_model=List[ActiveLearningLogResponse],
+    summary="List Active Learning Samples"
+)
+def list_active_learning_logs(
+    tag: Optional[str] = Query(None, description="Dataset tag filter (e.g., Indore_Hub_Active_v1.1)"),
+    overridden_only: bool = Query(False, description="Filter only cases where clinician overridden the AI"),
+    limit: int = Query(50, ge=1, le=500),
+    db: Session = Depends(get_db)
+):
+    """
+    Returns verified clinician labels accumulated through active learning
+    for continual training and domain adaptation.
+    """
+    query = db.query(ActiveLearningLog)
+    if tag:
+        query = query.filter(ActiveLearningLog.dataset_tag == tag)
+    if overridden_only:
+        query = query.filter(ActiveLearningLog.was_overridden == True)
+
+    logs = query.order_by(ActiveLearningLog.updated_at.desc()).limit(limit).all()
+    return logs
+
+
+@router.get(
+    "/active-learning/export",
+    summary="Export PyTorch Fine-Tuning Manifest"
+)
+def export_active_learning_dataset(
+    tag: Optional[str] = Query(None, description="Dataset version tag to export"),
+    db: Session = Depends(get_db)
+):
+    """
+    Exports clean, verified training manifest with image paths and labels
+    for PyTorch DataLoader fine-tuning epochs (v1 -> v1.1/v2).
+    """
+    return ActiveLearningService.export_fine_tuning_manifest(db=db, dataset_tag=tag)

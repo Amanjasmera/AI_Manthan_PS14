@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Filter, Eye, Download, FileText, CheckCircle2, Clock } from 'lucide-react';
+import { Search, Filter, Eye, Download, FileText, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
 import { ScreeningListItem } from '../types';
 import { Language, translations } from '../utils/language';
 import { SeverityBadge, UrgencyBadge } from './SeverityBadge';
@@ -123,8 +123,13 @@ export const PatientHistoryTable: React.FC<PatientHistoryTableProps> = ({
 
                     <td className="px-4 py-3.5">
                       <SeverityBadge grade={effectiveGrade} gradeName={s.grade_name} size="sm" />
-                      <div className="text-[10px] text-slate-400 mt-1 font-mono">
-                        {Math.round(s.confidence * 100)}% Confidence
+                      <div className="flex items-center space-x-1.5 text-[10px] text-slate-400 mt-1 font-mono">
+                        <span>{Math.round(s.confidence * 100)}% Conf</span>
+                        {s.uncertainty_score !== undefined && (
+                          <span className={s.uncertainty_score > 0.50 ? "text-amber-400 font-bold" : "text-slate-400"}>
+                            • H: {s.uncertainty_score.toFixed(3)}
+                          </span>
+                        )}
                       </div>
                     </td>
 
@@ -134,13 +139,18 @@ export const PatientHistoryTable: React.FC<PatientHistoryTableProps> = ({
 
                     <td className="px-4 py-3.5">
                       {s.status === 'REVIEWED' ? (
-                        <span className="inline-flex items-center space-x-1 text-cyan-400 text-[11px] font-semibold bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">
+                        <span className="inline-flex items-center space-x-1 text-emerald-400 text-[11px] font-semibold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
                           <CheckCircle2 className="w-3.5 h-3.5" />
                           <span>Doctor Verified</span>
                         </span>
+                      ) : s.requires_manual_doctor_review ? (
+                        <span className="inline-flex items-center space-x-1 text-amber-300 text-[11px] font-semibold bg-amber-500/15 px-2 py-0.5 rounded border border-amber-500/30">
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Review Required</span>
+                        </span>
                       ) : (
-                        <span className="inline-flex items-center space-x-1 text-amber-400 text-[11px] font-semibold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                          <Clock className="w-3.5 h-3.5" />
+                        <span className="inline-flex items-center space-x-1 text-slate-300 text-[11px] font-semibold bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
+                          <Clock className="w-3.5 h-3.5 text-slate-400" />
                           <span>Pending Review</span>
                         </span>
                       )}
@@ -180,4 +190,3 @@ export const PatientHistoryTable: React.FC<PatientHistoryTableProps> = ({
     </div>
   );
 };
-

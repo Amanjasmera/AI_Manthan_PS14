@@ -58,6 +58,8 @@ class Screening(Base):
     predicted_grade = Column(Integer, nullable=True, index=True)
     grade_name = Column(String(80), nullable=True)
     confidence = Column(Float, nullable=True)
+    uncertainty_score = Column(Float, default=0.0)
+    requires_manual_doctor_review = Column(Boolean, default=False, index=True)
 
     # Clinical Status & Referral Urgency
     referral_urgency = Column(String(50), default="ROUTINE", index=True)
@@ -137,15 +139,21 @@ class DoctorReview(Base):
 class ActiveLearningLog(Base):
     """
     5. active_learning_logs table:
-       screening_id, verified_label, dataset_tag ("Indore_Hub_v2"), updated_at
-       (Solves the 'Old APTOS Data vs Real-World Data' active learning requirement).
+       screening_id, verified_label, dataset_tag ("Indore_Hub_Active_v1.1"), updated_at
+       Stores clinician-verified samples for continual PyTorch fine-tuning and domain adaptation.
     """
     __tablename__ = "active_learning_logs"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     screening_id = Column(String(36), ForeignKey("screenings.id"), nullable=False, index=True)
     verified_label = Column(Integer, nullable=False)
-    dataset_tag = Column(String(100), default="Indore_Hub_v2", nullable=False)
+    dataset_tag = Column(String(100), default="Indore_Hub_Active_v1.1", nullable=False)
+    ai_predicted_grade = Column(Integer, nullable=True)
+    was_overridden = Column(Boolean, default=False)
+    doctor_name = Column(String(120), nullable=True)
+    clinical_notes = Column(Text, default="")
+    uncertainty_score = Column(Float, default=0.0)
+    image_path = Column(String(500), nullable=True)
     updated_at = Column(DateTime, default=datetime.utcnow, index=True)
 
     screening = relationship("Screening", back_populates="active_learning_logs")
@@ -164,6 +172,10 @@ class Prediction(Base):
     confidence = Column(Float, nullable=False)
     class_probabilities = Column(JSON, nullable=False)  # Dict[str, float]
     entropy = Column(Float, default=0.0)
+    uncertainty_score = Column(Float, default=0.0)
+    requires_manual_doctor_review = Column(Boolean, default=False)
+    epistemic_uncertainty = Column(Float, default=0.0)
+    aleatoric_uncertainty = Column(Float, default=0.0)
     confidence_interval = Column(JSON, nullable=True)
     inference_time_ms = Column(Float, default=0.0)
     temperature = Column(Float, default=1.0)
@@ -222,7 +234,11 @@ class PredictionResponse(BaseModel):
     confidence: float
     class_probabilities: Dict[str, float]
     entropy: float
-    confidence_interval: Optional[Dict[str, float]] = None
+    uncertainty_score: float = 0.0
+    requires_manual_doctor_review: bool = False
+    epistemic_uncertainty: float = 0.0
+    aleatoric_uncertainty: float = 0.0
+    confidence_interval: Optional[Dict[str, Any]] = None
     inference_time_ms: float
     temperature: float
     gradcam_url: Optional[str] = None
@@ -246,11 +262,13 @@ class DoctorReviewCreate(BaseModel):
     confirmed_grade: int
     referral_recommendation: Optional[str] = "Specialist ophthalmologist consultation"
     clinical_notes: Optional[str] = ""
+    dataset_tag: Optional[str] = "Indore_Hub_Active_v1.1"
 
 class DoctorReviewResponse(DoctorReviewCreate):
     id: str
     was_overridden: bool
     reviewed_at: datetime
+    dataset_tag: Optional[str] = "Indore_Hub_Active_v1.1"
     class Config:
         from_attributes = True
 
@@ -259,6 +277,12 @@ class ActiveLearningLogResponse(BaseModel):
     screening_id: str
     verified_label: int
     dataset_tag: str
+    ai_predicted_grade: Optional[int] = None
+    was_overridden: bool = False
+    doctor_name: Optional[str] = None
+    clinical_notes: Optional[str] = ""
+    uncertainty_score: Optional[float] = 0.0
+    image_path: Optional[str] = None
     updated_at: datetime
     class Config:
         from_attributes = True
@@ -283,6 +307,8 @@ class ScreeningDetailResponse(BaseModel):
     report_pdf_url: Optional[str] = None
 
     # New fields for PS-14 Commercial & Clinical Stratification
+    uncertainty_score: float = 0.0
+    requires_manual_doctor_review: bool = False
     billing_status: str = "₹25 Valid Scan"
     billing_amount: float = 25.0
     commercial_tier: str = "Tier 2: Valid Diagnostic Tele-Ophthalmology Scan"
@@ -292,3 +318,4 @@ class ScreeningDetailResponse(BaseModel):
 
     class Config:
         from_attributes = True
+

@@ -145,6 +145,8 @@ def list_screenings(
             "predicted_grade": grade_val,
             "grade_name": grade_str,
             "confidence": conf_val,
+            "uncertainty_score": round(s.uncertainty_score, 4) if hasattr(s, "uncertainty_score") and s.uncertainty_score is not None else (round(pred.entropy, 4) if pred else 0.0),
+            "requires_manual_doctor_review": bool(s.requires_manual_doctor_review) if hasattr(s, "requires_manual_doctor_review") else False,
             "referral_urgency": s.referral_urgency,
             "status": s.status,
             "confirmed_grade": doctor.confirmed_grade if doctor else None,

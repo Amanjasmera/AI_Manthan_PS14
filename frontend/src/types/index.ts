@@ -28,7 +28,12 @@ export interface Prediction {
   confidence: number;
   class_probabilities: Record<string, number>;
   entropy: number;
-  confidence_interval?: Record<string, number> | null;
+  uncertainty_score?: number;
+  requires_manual_doctor_review?: boolean;
+  epistemic_uncertainty?: number;
+  aleatoric_uncertainty?: number;
+  safety_rationale?: string[];
+  confidence_interval?: Record<string, any> | null;
   inference_time_ms: number;
   temperature: number;
   gradcam_url?: string;
@@ -71,6 +76,8 @@ export interface ScreeningDetail {
   doctor_review?: DoctorReview;
   referral_urgency: ReferralUrgency;
   status: string;
+  uncertainty_score?: number;
+  requires_manual_doctor_review?: boolean;
   created_at: string;
   report_pdf_url?: string;
 }
@@ -85,6 +92,8 @@ export interface ScreeningListItem {
   predicted_grade: number;
   grade_name: string;
   confidence: number;
+  uncertainty_score?: number;
+  requires_manual_doctor_review?: boolean;
   referral_urgency: ReferralUrgency;
   status: string;
   confirmed_grade?: number;
@@ -103,6 +112,14 @@ export interface SystemHealth {
     weights_found: boolean;
     model_status: string;
     calibrated_temperature: number;
+  };
+  bayesian_deep_learning?: {
+    mc_dropout_enabled: boolean;
+    standards_reference: string;
+    safe_entropy_threshold: number;
+    epistemic_uncertainty_decomposition: boolean;
+    aleatoric_uncertainty_decomposition: boolean;
+    clinical_safety_gate: string;
   };
   datasets_supported: string[];
   compliance: string;

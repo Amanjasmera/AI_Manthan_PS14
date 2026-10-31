@@ -39,6 +39,9 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
   const currentGrade = doctor ? doctor.confirmed_grade : (pred?.predicted_grade ?? 0);
   const baseImageUrl = showRaw ? screening.raw_image_url : (screening.preprocessed_image_url || screening.raw_image_url);
 
+  const isDoctorReviewRequired = Boolean(screening.requires_manual_doctor_review || pred?.requires_manual_doctor_review);
+  const uncertaintyScore = pred?.uncertainty_score ?? pred?.entropy ?? screening.uncertainty_score ?? 0;
+
   return (
     <div className="space-y-6">
       {/* Top Banner: Patient Info & Actions */}
@@ -161,6 +164,30 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
         {/* Right Column: AI Decision Support & Clinical Summary (5 Cols) */}
         <div className="lg:col-span-5 space-y-4">
 
+          {/* Bayesian Deep Learning Clinical Safety Alert */}
+          {isDoctorReviewRequired && (
+            <div className="bg-amber-950/40 border-2 border-amber-500/50 rounded-2xl p-4 shadow-xl text-amber-200 space-y-2">
+              <div className="flex items-center space-x-2 text-amber-300 font-bold text-xs uppercase tracking-wide">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>Bayesian Clinical Safety Gate Triggered</span>
+                <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-mono bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                  Entropy: {uncertaintyScore.toFixed(3)} &gt; 0.50
+                </span>
+              </div>
+              <p className="text-[11px] text-amber-200/90 leading-relaxed">
+                High predictive entropy detected due to ambiguous pathology, optical blur, or borderline lesions.
+                <b> Auto-approval blocked.</b> Mandatory clinical validation required by an ophthalmologist.
+              </p>
+              {pred?.safety_rationale && pred.safety_rationale.length > 0 && (
+                <ul className="text-[10px] font-mono text-amber-300/80 list-disc list-inside space-y-0.5 pt-1 border-t border-amber-500/20">
+                  {pred.safety_rationale.map((r, i) => (
+                    <li key={i}>{r}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
           {/* Primary Severity Grade Card */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -249,7 +276,7 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
               </div>
             </div>
 
-            {/* Inference Metadata & Checkpoint Status */}
+            {/* Inference Metadata & Bayesian Uncertainty Status */}
             <div className="p-3 rounded-xl bg-slate-950 border border-slate-800/80 text-[11px] space-y-1.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-1.5 text-slate-300 font-semibold">
@@ -264,13 +291,29 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
               <p className="text-slate-400 font-mono text-[10px]">
                 {pred?.model_provenance || 'EfficientNet-B0'}
               </p>
-              <div className="flex items-center justify-between text-[10px] pt-1 border-t border-slate-900">
+              <div className="grid grid-cols-2 gap-2 text-[10px] pt-1.5 border-t border-slate-900">
                 <span className="text-slate-400">
-                  Entropy: <b className="text-white font-mono">{pred?.entropy ?? 0}</b>
+                  Predictive Entropy: <b className="text-white font-mono">{uncertaintyScore.toFixed(3)}</b>
                 </span>
                 <span className="text-slate-400">
-                  Temp (T): <b className="text-emerald-400 font-mono">{pred?.temperature ?? 1.5}</b>
+                  Epistemic (Model): <b className="text-cyan-400 font-mono">{(pred?.epistemic_uncertainty ?? 0).toFixed(3)}</b>
                 </span>
+                <span className="text-slate-400">
+                  Aleatoric (Noise): <b className="text-amber-400 font-mono">{(pred?.aleatoric_uncertainty ?? 0).toFixed(3)}</b>
+                </span>
+                <span className="text-slate-400">
+                  Temp (T): <b className="text-emerald-400 font-mono">{(pred?.temperature ?? 1.5).toFixed(2)}</b>
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-[10px] pt-1.5 border-t border-slate-900">
+                <span className="text-slate-400">
+                  Clinical Safety Gate:
+                </span>
+                {isDoctorReviewRequired ? (
+                  <span className="text-amber-400 font-bold font-mono">⚠️ MANUAL REVIEW REQUIRED</span>
+                ) : (
+                  <span className="text-emerald-400 font-bold font-mono">✓ AUTO-APPROVED (SAFE)</span>
+                )}
               </div>
             </div>
           </div>
