@@ -17,6 +17,7 @@ from app.core.classifier import DiabeticRetinopathyClassifier, ModelStatus
 from app.core.lesion_detector import MicrovasculatureLesionDetector
 from app.core.report_generator import PDFReportGenerator
 from app.core.uncertainty import BayesianUncertaintyEstimator
+from app.core.gradcam import generate_gradcam_visuals, generate_gradcam_heatmap_only, RealGradCAM
 from app.services.inference import RetinalInferencePipeline
 from app.services.screening_service import ScreeningService
 from app.services.active_learning import ActiveLearningService
@@ -307,6 +308,108 @@ def test_inference_pipeline_execution():
     assert "safety_rationale" in res
     assert isinstance(res["requires_manual_doctor_review"], bool)
 
+
+def test_gradcam_explainability_5class():
+    """
+    Validates that Grad-CAM generates a non-trivial (non-zero) heatmap
+    for all 5 ICDR severity classes using the three-tier fallback strategy.
+    """
+    from app.core.gradcam import generate_gradcam_visuals, generate_gradcam_heatmap_only
+    from app.core.preprocessor import RetinalPreprocessor
+
+    clf = DiabeticRetinopathyClassifier()
+    assert clf.model is not None, "Trained checkpoint must be loaded for Grad-CAM test"
+
+    # Build a realistic synthetic retinal image
+    img = make_test_retina_image()
+    model_input = RetinalPreprocessor.process_for_model(img, target_size=(160, 160))
+
+    for grade in range(5):
+        heatmap_rgb, overlay_rgb = generate_gradcam_visuals(
+            clf.model, model_input, target_dim=(256, 256), class_idx=grade
+        )
+        # Shape checks
+        assert heatmap_rgb.shape == (256, 256, 3), f"Grade {grade}: Unexpected heatmap shape {heatmap_rgb.shape}"
+        assert overlay_rgb.shape == (256, 256, 3), f"Grade {grade}: Unexpected overlay shape {overlay_rgb.shape}"
+        # Ensure non-trivial heatmap (not all-black/empty)
+        assert np.count_nonzero(heatmap_rgb) > 0, f"Grade {grade}: Grad-CAM heatmap is all zeros"
+        # Verify dtype is uint8 RGB
+        assert heatmap_rgb.dtype == np.uint8, f"Grade {grade}: Heatmap dtype must be uint8"
+
+    # Test heatmap-only variant
+    heatmap_only = generate_gradcam_heatmap_only(clf.model, model_input, target_dim=(256, 256), class_idx=0)
+    assert heatmap_only.shape == (256, 256, 3)
+    assert np.count_nonzero(heatmap_only) > 0
+
+
+def test_lesion_segmentation_opencv_pipeline():
+    """
+    Validates OpenCV morphological lesion detection returns structured output
+    with all required fields for every input image type.
+    """
+    from app.core.lesion_detector import MicrovasculatureLesionDetector
+
+    # Normal-looking synthetic retina (no lesions expected)
+    img = make_test_retina_image()
+    summary, overlay, mask = MicrovasculatureLesionDetector.detect_lesions(img)
+
+    # Structure validation
+    assert "microaneurysms" in summary
+    assert "hemorrhages" in summary
+    assert "hard_exudates" in summary
+    assert "soft_exudates" in summary
+    assert "classification_note" in summary
+    assert "method" in summary
+    assert summary["method"] == "OPENCV_MORPHOLOGICAL_FALLBACK"
+    assert summary["is_verified_model"] is False
+    assert overlay.shape[2] == 4, "Overlay must be 4-channel RGBA"
+    assert len(mask.shape) == 2, "Mask must be 2D grayscale"
+
+    # All counts must be non-negative integers
+    for key in ["microaneurysms", "hemorrhages", "hard_exudates", "soft_exudates"]:
+        assert isinstance(summary[key], int), f"'{key}' must be int, got {type(summary[key])}"
+        assert summary[key] >= 0, f"'{key}' count must be >= 0"
+
+    # Empty input guard
+    summary_empty, _, _ = MicrovasculatureLesionDetector.detect_lesions(None)
+    assert summary_empty["microaneurysms"] == 0
+    assert summary_empty["hemorrhages"] == 0
+
+
+def test_gradcam_url_in_screening_response():
+    """
+    End-to-end: validates that the screening pipeline stores the Grad-CAM
+    overlay JPEG and returns a non-null gradcam_url in the prediction response.
+    """
+    db = SessionLocal()
+    try:
+        service = ScreeningService()
+        img = make_test_retina_image()
+        _, enc = cv2.imencode(".jpg", img)
+        body = service.process_screening(
+            db=db,
+            image_bytes=enc.tobytes(),
+            patient_name="GradCAM Test Patient",
+            age=62,
+            gender="Male",
+            eye_side="RIGHT",
+            diabetes_history="Type 2 Diabetes (10 yrs)"
+        )
+        # If IQA passed, prediction and gradcam_url must be present
+        if body["iqa"]["passed"]:
+            assert body["prediction"] is not None, "prediction must not be None after IQA pass"
+            gradcam_url = body["prediction"].get("gradcam_url")
+            assert gradcam_url is not None, "gradcam_url must not be None when model is VERIFIED_TRAINED_CHECKPOINT"
+            assert "/api/v1/files/" in gradcam_url, f"Unexpected gradcam_url format: {gradcam_url}"
+            # Verify 5-class output
+            predicted_grade = body["prediction"]["predicted_grade"]
+            assert 0 <= predicted_grade <= 4, f"Predicted grade {predicted_grade} out of ICDR range"
+            grade_name = body["prediction"]["grade_name"]
+            assert grade_name in ["No DR", "Mild NPDR", "Moderate NPDR", "Severe NPDR", "Proliferative DR"], \
+                f"Unexpected grade name: {grade_name}"
+    finally:
+        db.close()
+
 if __name__ == "__main__":
     print("Running integration tests directly...")
     test_database_schema_and_tables()
@@ -327,6 +430,12 @@ if __name__ == "__main__":
     print("Passed: test_uncertainty_safety_gate_threshold_trigger")
     test_inference_pipeline_execution()
     print("Passed: test_inference_pipeline_execution")
+    test_gradcam_explainability_5class()
+    print("Passed: test_gradcam_explainability_5class")
+    test_lesion_segmentation_opencv_pipeline()
+    print("Passed: test_lesion_segmentation_opencv_pipeline")
+    test_gradcam_url_in_screening_response()
+    print("Passed: test_gradcam_url_in_screening_response")
     test_health_endpoint()
     print("Passed: test_health_endpoint")
     test_screening_analyze_api_flow()
@@ -337,4 +446,4 @@ if __name__ == "__main__":
     print("Passed: test_doctor_review_and_active_learning_flow")
     test_pdf_report_generator_from_db()
     print("Passed: test_pdf_report_generator_from_db")
-    print("\n>>> ALL 14 INTEGRATION & BAYESIAN TESTS PASSED 100% CLEANLY! <<<")
+    print("\n>>> ALL 17 INTEGRATION, GRAD-CAM & BAYESIAN TESTS PASSED 100% CLEANLY! <<<")
