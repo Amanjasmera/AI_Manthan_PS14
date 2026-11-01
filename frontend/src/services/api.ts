@@ -1,6 +1,7 @@
-import { ScreeningDetail, ScreeningListItem, DoctorReview, SystemHealth, IqaResult } from '../types';
+import { ScreeningDetail, ScreeningListItem, DoctorReview, SystemHealth, IqaResult, UserProfile, UserRole, UserProfileUpdateRequest, AuthSession } from '../types';
 
-const API_BASE = '/api/v1';
+export const BACKEND_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+export const API_BASE = `${BACKEND_URL}/api/v1`;
 
 export async function uploadAndAnalyzeScreening(formData: FormData): Promise<ScreeningDetail> {
   const res = await fetch(`${API_BASE}/screenings/analyze`, {
@@ -36,7 +37,8 @@ export async function getScreeningDetail(id: string): Promise<ScreeningDetail> {
 }
 
 export async function listScreenings(page = 1, limit = 20, urgency?: string): Promise<{ total: number; items: ScreeningListItem[] }> {
-  const url = new URL(`${window.location.origin}${API_BASE}/screenings`);
+  const origin = BACKEND_URL || window.location.origin;
+  const url = new URL(`${origin}/api/v1/screenings`);
   url.searchParams.append('page', page.toString());
   url.searchParams.append('limit', limit.toString());
   if (urgency) {
@@ -94,6 +96,70 @@ export async function getSystemHealth(): Promise<SystemHealth> {
   const res = await fetch(`${API_BASE}/health`);
   if (!res.ok) {
     throw new Error('Health check failed');
+  }
+  return res.json();
+}
+
+
+export async function loginUser(username: string, password: string, role?: UserRole): Promise<AuthSession> {
+  const payload: any = { username, password };
+  if (role) {
+    payload.role = role;
+  }
+  const res = await fetch(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Login failed. Please check credentials.');
+  }
+  return res.json();
+}
+
+export async function updateUserProfile(data: UserProfileUpdateRequest, token: string): Promise<AuthSession> {
+  const res = await fetch(`${API_BASE}/auth/profile`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to update profile.');
+  }
+  return res.json();
+}
+
+export async function registerUser(data: {
+  username: string;
+  email: string;
+  password: string;
+  full_name: string;
+  role: UserRole;
+  license_number?: string;
+}): Promise<AuthSession> {
+  const res = await fetch(`${API_BASE}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Registration failed.');
+  }
+  return res.json();
+}
+
+export async function demoSwitchRole(role: UserRole): Promise<AuthSession> {
+  const res = await fetch(`${API_BASE}/auth/demo-switch?role=${encodeURIComponent(role)}`, {
+    method: 'POST',
+  });
+  if (!res.ok) {
+    throw new Error('Demo switch failed');
   }
   return res.json();
 }

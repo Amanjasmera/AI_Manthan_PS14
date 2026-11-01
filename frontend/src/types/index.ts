@@ -125,3 +125,30 @@ export interface SystemHealth {
   datasets_supported: string[];
   compliance: string;
 }
+
+
+export type UserRole = 'User' | 'Doctor';
+
+export interface UserProfile {
+  id: string;
+  username: string;
+  email: string;
+  full_name: string;
+  role: UserRole;
+  license_number?: string;
+}
+
+export interface UserProfileUpdateRequest {
+  full_name?: string;
+  email?: string;
+  password?: string;
+  current_password?: string;
+  new_password?: string;
+  role?: UserRole;
+  license_number?: string;
+}
+
+export interface AuthSession {
+  token: string;
+  user: UserProfile;
+}
