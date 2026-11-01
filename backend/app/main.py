@@ -67,5 +67,17 @@ def root():
     return {
         "app": "RetinaVision-AI",
         "docs_url": "/docs",
-        "api_v1": "/api/v1/health"
+        "api_v1": "/api/v1/health",
+        "prototype_3d": "/prototype"
     }
+
+
+@app.get("/prototype", response_class=FileResponse, summary="Serve NETRA X 3D Screening Prototype")
+def serve_prototype():
+    """Serves the NETRA X 3D Retinal Screening Prototype HTML."""
+    prototype_path = Path(__file__).resolve().parent.parent.parent / "final_ui.html"
+    if not prototype_path.exists():
+        prototype_path = Path(__file__).resolve().parent.parent.parent / "final UI"
+    if prototype_path.exists():
+        return FileResponse(str(prototype_path), media_type="text/html")
+    raise HTTPException(status_code=404, detail="Prototype file not found.")
