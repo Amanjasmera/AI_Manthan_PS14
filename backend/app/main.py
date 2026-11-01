@@ -62,17 +62,8 @@ def serve_file(filename: str):
     return FileResponse(str(file_path), media_type=media_type)
 
 
-@app.get("/")
-def root():
-    return {
-        "app": "RetinaVision-AI",
-        "docs_url": "/docs",
-        "api_v1": "/api/v1/health",
-        "prototype_3d": "/prototype"
-    }
-
-
 @app.get("/prototype", response_class=FileResponse, summary="Serve NETRA X 3D Screening Prototype")
+@app.get("/", response_class=FileResponse, summary="Serve NETRA X 3D Screening Prototype at Root")
 def serve_prototype():
     """Serves the NETRA X 3D Retinal Screening Prototype HTML."""
     prototype_path = Path(__file__).resolve().parent.parent.parent / "final_ui.html"

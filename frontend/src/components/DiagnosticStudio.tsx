@@ -306,7 +306,7 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
             <div className="flex items-center justify-between border-b border-[rgba(70,170,255,0.15)] pb-2.5">
               <div className="flex items-center space-x-2 text-xs font-bold text-white">
                 <Microscope className="w-4 h-4 text-[#35b6ff]" />
-                <span>{pred?.model_status || 'VERIFIED_TRAINED_CHECKPOINT'}</span>
+                <span>{pred?.model_status === 'VERIFIED_TRAINED_CHECKPOINT' ? 'Verified Checkpoint' : (pred?.model_status || 'Verified Checkpoint')}</span>
               </div>
               <div className="flex items-center space-x-1 text-[11px] text-[#9ab0c9] font-mono">
                 <Clock className="w-3.5 h-3.5 text-[#35b6ff]" />

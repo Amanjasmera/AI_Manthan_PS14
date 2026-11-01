@@ -78,7 +78,7 @@ export const Header: React.FC<HeaderProps> = ({
 
               {/* 4. 3D Eye Tour */}
               <a
-                href="/prototype.html"
+                href={import.meta.env.PROD ? "https://ai-manthan-ps14.onrender.com/prototype" : "/prototype.html"}
                 className="flex items-center space-x-1.5 px-4 py-2 rounded-full text-[#35b6ff] bg-[#35b6ff]/10 hover:bg-[#35b6ff]/20 border border-[#35b6ff]/30 transition-all font-bold"
                 title="Launch 3D Eye Interactive Showcase"
               >
@@ -136,7 +136,7 @@ export const Header: React.FC<HeaderProps> = ({
         </button>
 
         <a
-          href="/prototype.html"
+          href={import.meta.env.PROD ? "https://ai-manthan-ps14.onrender.com/prototype" : "/prototype.html"}
           className="flex flex-col items-center py-1.5 px-2 rounded-xl text-[#35b6ff] hover:text-white"
         >
           <Eye className="w-4 h-4 mb-0.5 text-[#35b6ff]" />
