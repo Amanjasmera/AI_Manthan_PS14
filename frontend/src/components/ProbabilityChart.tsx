@@ -1,6 +1,7 @@
 import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Language, translations } from '../utils/language';
+import { BarChart3 } from 'lucide-react';
 
 interface ProbabilityChartProps {
   lang: Language;
@@ -16,11 +17,11 @@ export const ProbabilityChart: React.FC<ProbabilityChartProps> = ({
   const t = translations[lang];
 
   const labels = [
-    { key: 'Grade_0', name: 'Grade 0', short: 'No DR', color: '#10B981' },
-    { key: 'Grade_1', name: 'Grade 1', short: 'Mild', color: '#84CC16' },
-    { key: 'Grade_2', name: 'Grade 2', short: 'Moderate', color: '#F59E0B' },
-    { key: 'Grade_3', name: 'Grade 3', short: 'Severe', color: '#EA580C' },
-    { key: 'Grade_4', name: 'Grade 4', short: 'PDR', color: '#DC2626' },
+    { key: 'Grade_0', name: 'Grade 0', short: 'No DR', color: '#3dff9a' },
+    { key: 'Grade_1', name: 'Grade 1', short: 'Mild', color: '#a3e635' },
+    { key: 'Grade_2', name: 'Grade 2', short: 'Moderate', color: '#ffb020' },
+    { key: 'Grade_3', name: 'Grade 3', short: 'Severe', color: '#ff8a3d' },
+    { key: 'Grade_4', name: 'Grade 4', short: 'PDR', color: '#ff4d6d' },
   ];
 
   const data = labels.map((item, idx) => {
@@ -36,12 +37,13 @@ export const ProbabilityChart: React.FC<ProbabilityChartProps> = ({
   });
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-xs font-bold text-slate-200 tracking-wide uppercase">
-          {t.probTitle}
+    <div className="glass-panel p-5 shadow-2xl">
+      <div className="flex items-center justify-between mb-4 border-b border-[rgba(70,170,255,0.15)] pb-2.5">
+        <h3 className="text-xs font-heading font-bold text-[#eaf3ff] tracking-wider uppercase flex items-center space-x-1.5">
+          <BarChart3 className="w-4 h-4 text-[#35b6ff]" />
+          <span>{t.probTitle}</span>
         </h3>
-        <span className="text-[11px] font-mono text-brand-400">
+        <span className="text-[11px] font-mono text-[#35b6ff] font-bold">
           Softmax Calibrated
         </span>
       </div>
@@ -54,13 +56,13 @@ export const ProbabilityChart: React.FC<ProbabilityChartProps> = ({
               stroke="#64748B"
               fontSize={11}
               tickLine={false}
-              axisLine={{ stroke: '#334155' }}
+              axisLine={{ stroke: 'rgba(70,170,255,0.2)' }}
             />
             <YAxis
               stroke="#64748B"
               fontSize={10}
               tickLine={false}
-              axisLine={{ stroke: '#334155' }}
+              axisLine={{ stroke: 'rgba(70,170,255,0.2)' }}
               tickFormatter={(val) => `${val}%`}
               domain={[0, 100]}
             />
@@ -69,9 +71,9 @@ export const ProbabilityChart: React.FC<ProbabilityChartProps> = ({
                 if (active && payload && payload.length) {
                   const d = payload[0].payload;
                   return (
-                    <div className="bg-slate-950 border border-slate-700 px-2.5 py-1.5 rounded-lg shadow-lg text-xs">
+                    <div className="bg-[#04070d]/95 border border-[rgba(70,170,255,0.4)] px-3 py-2 rounded-xl shadow-2xl text-xs backdrop-blur-md">
                       <div className="font-bold text-white">{d.name} ({d.short})</div>
-                      <div className="text-brand-400 font-mono font-bold mt-0.5">
+                      <div className="text-[#35b6ff] font-mono font-bold mt-1">
                         {d.percentage}% Confidence
                       </div>
                     </div>
@@ -80,14 +82,14 @@ export const ProbabilityChart: React.FC<ProbabilityChartProps> = ({
                 return null;
               }}
             />
-            <Bar dataKey="percentage" radius={[6, 6, 0, 0]}>
+            <Bar dataKey="percentage" radius={[8, 8, 0, 0]}>
               {data.map((entry, index) => (
                 <Cell
                   key={`cell-${index}`}
                   fill={entry.color}
-                  fillOpacity={entry.isPredicted ? 1 : 0.4}
+                  fillOpacity={entry.isPredicted ? 1 : 0.35}
                   stroke={entry.isPredicted ? '#FFFFFF' : 'none'}
-                  strokeWidth={entry.isPredicted ? 1.5 : 0}
+                  strokeWidth={entry.isPredicted ? 2 : 0}
                 />
               ))}
             </Bar>
@@ -97,4 +99,3 @@ export const ProbabilityChart: React.FC<ProbabilityChartProps> = ({
     </div>
   );
 };
-

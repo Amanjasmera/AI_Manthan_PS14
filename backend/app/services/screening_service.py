@@ -64,77 +64,23 @@ class ScreeningService:
         mask_filename = f"{screening_id}_mask.png"
         mask_path = UPLOAD_DIR / mask_filename
 
-        # If IQA fails: REJECT early without executing expensive model inference
-        # Apply Zero-Charge Billing Protection (₹0 Charged)
+        # Image Verification & Report Guard:
+        # If IQA fails (blur, glare, underexposure, low contrast, non-retinal, or invalid format),
+        # strictly do NOT generate or return any screening report or prediction results.
+        # Clean up temporary raw upload, rollback session, and return a clean failure response.
         if not iqa["passed"]:
-            cv2.imwrite(str(prep_path), cv2.resize(img_bgr, (512, 512)))
-            empty_overlay = np.zeros((512, 512, 4), dtype=np.uint8)
-            cv2.imwrite(str(mask_path), empty_overlay)
-
-            rejection_triage = get_iqa_rejection_triage(
-                error_codes=iqa.get("error_codes", []),
-                feedback=iqa.get("feedback", ""),
-                recapture_instructions=iqa.get("recapture_instructions", "")
+            if raw_path.exists():
+                try:
+                    raw_path.unlink()
+                except Exception:
+                    pass
+            db.rollback()
+            error_codes = ", ".join(iqa.get("error_codes", ["QUALITY_CHECK_FAILED"]))
+            feedback = iqa.get("feedback", "Image verification failed.")
+            recapture = iqa.get("recapture_instructions", "Please recapture retinal photograph.")
+            raise ValueError(
+                f"Image verification failed ({error_codes}): {feedback} {recapture}"
             )
-
-            screening = Screening(
-                id=screening_id,
-                patient_id=patient.id,
-                eye_side=eye_side,
-                raw_image_path=str(raw_path),
-                preprocessed_image_path=str(prep_path),
-                iqa_passed=False,
-                iqa_error_codes=iqa["error_codes"],
-                blur_score=iqa["blur_score"],
-                illumination_score=iqa["illumination_score"],
-                contrast_score=iqa["contrast_score"],
-                fov_score=iqa.get("fov_score", 0.0),
-                iqa_feedback=iqa["feedback"],
-                recapture_instructions=iqa["recapture_instructions"],
-                predicted_grade=None,
-                grade_name="Retake Required",
-                confidence=0.0,
-                referral_urgency="RETAKE",
-                status="IQA_RETAKE",
-                billing_status="₹0 Charged — Waived by IQA Gatekeeper",
-                billing_amount=0.0,
-                systemic_risk=rejection_triage["systemic_risk"],
-                next_screening_interval=rejection_triage["next_interval"]
-            )
-            db.add(screening)
-
-            audit = AuditLog(
-                screening_id=screening_id,
-                event_type="IQA_REJECTION",
-                details=f"Quality gate rejected image: {iqa['error_codes']}. Waived billing (₹0 charged)."
-            )
-            db.add(audit)
-            db.commit()
-
-            # Generate rejection PDF report with billing waiver status
-            report_data = {
-                "id": screening_id,
-                "patient": {
-                    "full_name": patient.full_name,
-                    "age": patient.age,
-                    "gender": patient.gender,
-                    "diabetes_history": patient.diabetes_history
-                },
-                "eye_side": eye_side,
-                "iqa": iqa,
-                "raw_image_path": str(raw_path),
-                "preprocessed_image_path": str(prep_path),
-                "prediction": None,
-                "lesions": {},
-                "status": screening.status,
-                "referral_urgency": "RETAKE",
-                "billing_status": "₹0 Charged — Waived by IQA Gatekeeper",
-                "systemic_risk": rejection_triage["systemic_risk"],
-                "next_screening_interval": rejection_triage["next_interval"]
-            }
-            PDFReportGenerator.generate_report(report_data)
-
-            return self.get_screening_dict(db, screening_id)
 
         # 5. IQA Passed: Proceed with Full AI Diagnostic Pipeline
         # High-res display preprocessing (512x512)

@@ -9,39 +9,44 @@ interface SeverityBadgeProps {
 }
 
 export const SeverityBadge: React.FC<SeverityBadgeProps> = ({ grade, gradeName, size = 'md' }) => {
-  const configs: Record<number, { bg: string; text: string; border: string; label: string; icon: any }> = {
+  const configs: Record<number, { bg: string; text: string; border: string; glow: string; label: string; icon: any }> = {
     0: {
-      bg: 'bg-emerald-500/15',
-      text: 'text-emerald-400',
-      border: 'border-emerald-500/30',
+      bg: 'bg-[#3dff9a]/15',
+      text: 'text-[#3dff9a]',
+      border: 'border-[#3dff9a]/40',
+      glow: 'shadow-[0_0_12px_rgba(61,255,154,0.3)]',
       label: 'Grade 0: No DR',
       icon: CheckCircle2,
     },
     1: {
-      bg: 'bg-lime-500/15',
-      text: 'text-lime-400',
-      border: 'border-lime-500/30',
+      bg: 'bg-[#a3e635]/15',
+      text: 'text-[#a3e635]',
+      border: 'border-[#a3e635]/40',
+      glow: 'shadow-[0_0_12px_rgba(163,230,53,0.3)]',
       label: 'Grade 1: Mild NPDR',
       icon: Shield,
     },
     2: {
-      bg: 'bg-amber-500/15',
-      text: 'text-amber-400',
-      border: 'border-amber-500/30',
+      bg: 'bg-[#ffb020]/15',
+      text: 'text-[#ffb020]',
+      border: 'border-[#ffb020]/40',
+      glow: 'shadow-[0_0_12px_rgba(255,176,32,0.3)]',
       label: 'Grade 2: Moderate NPDR',
       icon: AlertTriangle,
     },
     3: {
-      bg: 'bg-orange-500/15',
-      text: 'text-orange-400',
-      border: 'border-orange-500/30',
+      bg: 'bg-[#ff8a3d]/15',
+      text: 'text-[#ff8a3d]',
+      border: 'border-[#ff8a3d]/40',
+      glow: 'shadow-[0_0_12px_rgba(255,138,61,0.3)]',
       label: 'Grade 3: Severe NPDR',
       icon: AlertOctagon,
     },
     4: {
-      bg: 'bg-rose-500/15',
-      text: 'text-rose-400',
-      border: 'border-rose-500/30',
+      bg: 'bg-[#ff4d6d]/15',
+      text: 'text-[#ff4d6d]',
+      border: 'border-[#ff4d6d]/40',
+      glow: 'shadow-[0_0_12px_rgba(255,77,109,0.3)]',
       label: 'Grade 4: Proliferative DR',
       icon: AlertOctagon,
     },
@@ -52,13 +57,13 @@ export const SeverityBadge: React.FC<SeverityBadgeProps> = ({ grade, gradeName, 
 
   const sizeClasses = {
     sm: 'px-2 py-0.5 text-xs space-x-1',
-    md: 'px-2.5 py-1 text-xs sm:text-sm space-x-1.5',
-    lg: 'px-4 py-2 text-base space-x-2 font-bold',
+    md: 'px-3 py-1 text-xs sm:text-sm space-x-1.5',
+    lg: 'px-4 py-2 text-base space-x-2 font-heading font-bold',
   }[size];
 
   return (
     <span
-      className={`inline-flex items-center font-semibold rounded-lg border ${current.bg} ${current.text} ${current.border} ${sizeClasses}`}
+      className={`inline-flex items-center font-bold rounded-xl border ${current.bg} ${current.text} ${current.border} ${current.glow} ${sizeClasses}`}
     >
       <Icon className={size === 'sm' ? 'w-3.5 h-3.5' : size === 'md' ? 'w-4 h-4' : 'w-5 h-5'} />
       <span>{gradeName || current.label}</span>
@@ -67,35 +72,40 @@ export const SeverityBadge: React.FC<SeverityBadgeProps> = ({ grade, gradeName, 
 };
 
 export const UrgencyBadge: React.FC<{ urgency: ReferralUrgency }> = ({ urgency }) => {
-  const configs: Record<ReferralUrgency, { bg: string; text: string; border: string; label: string }> = {
+  const configs: Record<ReferralUrgency, { bg: string; text: string; border: string; glow: string; label: string }> = {
     ROUTINE: {
-      bg: 'bg-emerald-500/10',
-      text: 'text-emerald-400',
-      border: 'border-emerald-500/20',
+      bg: 'bg-[#3dff9a]/10',
+      text: 'text-[#3dff9a]',
+      border: 'border-[#3dff9a]/30',
+      glow: '',
       label: 'Routine Screening',
     },
     NON_URGENT: {
-      bg: 'bg-amber-500/10',
-      text: 'text-amber-400',
-      border: 'border-amber-500/20',
+      bg: 'bg-[#ffb020]/10',
+      text: 'text-[#ffb020]',
+      border: 'border-[#ffb020]/30',
+      glow: '',
       label: 'Referral (4-6 Wks)',
     },
     URGENT: {
-      bg: 'bg-orange-500/10',
-      text: 'text-orange-400',
-      border: 'border-orange-500/20',
+      bg: 'bg-[#ff8a3d]/15',
+      text: 'text-[#ff8a3d]',
+      border: 'border-[#ff8a3d]/40',
+      glow: 'shadow-[0_0_10px_rgba(255,138,61,0.25)]',
       label: 'Urgent Referral (1-2 Wks)',
     },
     CRITICAL: {
-      bg: 'bg-rose-500/15',
-      text: 'text-rose-400',
-      border: 'border-rose-500/30',
+      bg: 'bg-[#ff4d6d]/15',
+      text: 'text-[#ff4d6d]',
+      border: 'border-[#ff4d6d]/40',
+      glow: 'shadow-[0_0_12px_rgba(255,77,109,0.3)]',
       label: 'Emergency Referral (<72h)',
     },
     RETAKE: {
-      bg: 'bg-slate-500/15',
-      text: 'text-slate-400',
-      border: 'border-slate-500/30',
+      bg: 'bg-slate-800',
+      text: 'text-slate-300',
+      border: 'border-slate-700',
+      glow: '',
       label: 'Retake Photo Required',
     },
   };
@@ -104,10 +114,9 @@ export const UrgencyBadge: React.FC<{ urgency: ReferralUrgency }> = ({ urgency }
 
   return (
     <span
-      className={`inline-flex items-center px-2 py-0.5 text-[11px] font-semibold rounded border ${current.bg} ${current.text} ${current.border}`}
+      className={`inline-flex items-center px-2.5 py-1 text-[11px] font-bold rounded-lg border ${current.bg} ${current.text} ${current.border} ${current.glow}`}
     >
       {current.label}
     </span>
   );
 };
-

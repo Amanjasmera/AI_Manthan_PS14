@@ -10,6 +10,75 @@ interface ImageUploaderProps {
   isLoading: boolean;
 }
 
+const BENCHMARKS = [
+  {
+    file: 'sample_normal_grade0.jpg',
+    name: 'Rajesh Sharma',
+    age: 52,
+    gender: 'Male',
+    grade: 0,
+    icon: '🟢',
+    label: 'Grade 0: Normal Retina (No DR)',
+    badge: 'Normal Control',
+    color: 'border-emerald-500/30 hover:border-emerald-400 bg-emerald-950/20 text-emerald-300 hover:bg-emerald-950/40',
+  },
+  {
+    file: 'sample_mild_grade1.jpg',
+    name: 'Sunita Verma',
+    age: 58,
+    gender: 'Female',
+    grade: 1,
+    icon: '🟡',
+    label: 'Grade 1: Mild NPDR',
+    badge: 'Microaneurysms Only',
+    color: 'border-amber-500/30 hover:border-amber-400 bg-amber-950/20 text-amber-300 hover:bg-amber-950/40',
+  },
+  {
+    file: 'sample_moderate_grade2.jpg',
+    name: 'Mohammad Ali',
+    age: 63,
+    gender: 'Male',
+    grade: 2,
+    icon: '🟠',
+    label: 'Grade 2: Moderate NPDR',
+    badge: 'Exudates & Hemorrhages',
+    color: 'border-orange-500/30 hover:border-orange-400 bg-orange-950/20 text-orange-300 hover:bg-orange-950/40',
+  },
+  {
+    file: 'sample_severe_grade3.jpg',
+    name: 'Anita Devi',
+    age: 66,
+    gender: 'Female',
+    grade: 3,
+    icon: '🔴',
+    label: 'Grade 3: Severe NPDR',
+    badge: '4-Quadrant Blots',
+    color: 'border-rose-500/30 hover:border-rose-400 bg-rose-950/20 text-rose-300 hover:bg-rose-950/40',
+  },
+  {
+    file: 'sample_proliferative_grade4.jpg',
+    name: 'Kailash Chand',
+    age: 71,
+    gender: 'Male',
+    grade: 4,
+    icon: '🚨',
+    label: 'Grade 4: Proliferative DR',
+    badge: 'Neovascularization',
+    color: 'border-red-500/40 hover:border-red-400 bg-red-950/30 text-red-300 hover:bg-red-950/50',
+  },
+  {
+    file: 'sample_blurry_fail.jpg',
+    name: 'Vikram Patel',
+    age: 49,
+    gender: 'Male',
+    grade: 1,
+    icon: '⚠️',
+    label: 'Blurry Sample (IQA Retake)',
+    badge: 'Simulated Blur Artifact',
+    color: 'border-slate-600/40 hover:border-slate-400 bg-slate-900/40 text-slate-300 hover:bg-slate-900/70',
+  },
+];
+
 export const ImageUploader: React.FC<ImageUploaderProps> = ({ lang, onAnalyze, isLoading }) => {
   const t = translations[lang];
 
@@ -31,13 +100,13 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ lang, onAnalyze, i
     setPreviewUrl(URL.createObjectURL(file));
     setIqaResult(null);
 
-    // Run quick live IQA pre-check
+    // Run rapid live IQA pre-check
     setIqaChecking(true);
     try {
       const res = await precheckIqa(file);
       setIqaResult(res);
     } catch (e) {
-      console.warn('IQA pre-check warning:', e);
+      console.warn('IQA pre-check notice:', e);
     } finally {
       setIqaChecking(false);
     }
@@ -50,13 +119,23 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ lang, onAnalyze, i
     }
   };
 
-  const handleSelectSample = async (filename: string, defaultName: string, grade: number) => {
+  const handleSelectSample = async (
+    filename: string,
+    defaultName: string,
+    grade: number,
+    age: number,
+    gender: string
+  ) => {
     try {
-      // Fetch sample image from server
-      const res = await fetch(`/api/v1/files/${filename}`);
+      let res = await fetch(`/api/v1/files/${filename}`);
+      if (!res.ok) {
+        res = await fetch(`/samples/${filename}`);
+      }
       const blob = await res.blob();
       const file = new File([blob], filename, { type: 'image/jpeg' });
       setPatientName(defaultName);
+      setPatientAge(age);
+      setPatientGender(gender);
       setEyeSide(grade % 2 === 0 ? 'RIGHT' : 'LEFT');
       handleFileChange(file);
     } catch (e) {
@@ -80,77 +159,68 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ lang, onAnalyze, i
   };
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
-      <div className="mb-6">
-        <h2 className="text-lg font-bold text-white flex items-center space-x-2">
-          <Upload className="w-5 h-5 text-brand-400" />
-          <span>{t.uploadTitle}</span>
-        </h2>
-        <p className="text-xs text-slate-400 mt-1">{t.uploadSubtitle}</p>
+    <div className="glass-panel p-5 sm:p-6 shadow-2xl relative overflow-hidden pop-in rounded-2xl border border-[rgba(70,170,255,0.2)]">
+      {/* Decorative top-right corner glow */}
+      <div className="absolute top-0 right-0 w-36 h-36 bg-[#35b6ff]/10 rounded-full blur-3xl pointer-events-none" />
+
+      {/* Section Header */}
+      <div className="mb-5">
+        <div className="flex items-center space-x-2.5">
+          <div className="w-8 h-8 rounded-xl bg-[#35b6ff]/20 text-[#35b6ff] flex items-center justify-center border border-[#35b6ff]/30 shadow-[0_0_10px_rgba(53,182,255,0.2)]">
+            <Upload className="w-4 h-4" />
+          </div>
+          <div>
+            <h2 className="font-heading font-bold text-lg text-white">
+              {t.uploadTitle}
+            </h2>
+            <p className="text-xs text-[#9ab0c9] mt-0.5">{t.uploadSubtitle}</p>
+          </div>
+        </div>
       </div>
 
-      {/* Benchmark Sample Selector */}
-      <div className="mb-6 bg-slate-950/60 p-3.5 rounded-xl border border-slate-800/80">
-        <div className="flex items-center space-x-2 text-xs font-semibold text-slate-300 mb-2.5">
-          <Sparkles className="w-4 h-4 text-amber-400" />
-          <span>{t.samplesTitle}:</span>
+      {/* Select Sample Clinical Benchmark (Clean 2-Column Readable Layout with Full Stage Names, No Truncation) */}
+      <div className="mb-5 bg-[#04070d]/60 p-3.5 sm:p-4 rounded-2xl border border-[rgba(70,170,255,0.2)]">
+        <div className="flex items-center justify-between text-xs font-bold text-[#eaf3ff] mb-3">
+          <span className="flex items-center space-x-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-[#ffb020]" />
+            <span>Select Sample Clinical Benchmark:</span>
+          </span>
+          <span className="text-[10px] text-[#35b6ff] font-mono">1-Click Test Cases</span>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-          <button
-            type="button"
-            onClick={() => handleSelectSample('sample_normal_grade0.jpg', 'Rajesh Sharma', 0)}
-            className="p-2 rounded-lg bg-slate-900 hover:bg-emerald-950/40 border border-slate-800 hover:border-emerald-600/40 text-slate-300 hover:text-emerald-300 transition-all text-left font-medium"
-          >
-            🟢 {t.grade0}
-          </button>
-          <button
-            type="button"
-            onClick={() => handleSelectSample('sample_mild_grade1.jpg', 'Sunita Verma', 1)}
-            className="p-2 rounded-lg bg-slate-900 hover:bg-lime-950/40 border border-slate-800 hover:border-lime-600/40 text-slate-300 hover:text-lime-300 transition-all text-left font-medium"
-          >
-            🟡 {t.grade1}
-          </button>
-          <button
-            type="button"
-            onClick={() => handleSelectSample('sample_moderate_grade2.jpg', 'Mohammad Ali', 2)}
-            className="p-2 rounded-lg bg-slate-900 hover:bg-amber-950/40 border border-slate-800 hover:border-amber-600/40 text-slate-300 hover:text-amber-300 transition-all text-left font-medium"
-          >
-            🟠 {t.grade2}
-          </button>
-          <button
-            type="button"
-            onClick={() => handleSelectSample('sample_severe_grade3.jpg', 'Anita Devi', 3)}
-            className="p-2 rounded-lg bg-slate-900 hover:bg-orange-950/40 border border-slate-800 hover:border-orange-600/40 text-slate-300 hover:text-orange-300 transition-all text-left font-medium"
-          >
-            🔴 {t.grade3}
-          </button>
-          <button
-            type="button"
-            onClick={() => handleSelectSample('sample_proliferative_grade4.jpg', 'Kailash Chand', 4)}
-            className="p-2 rounded-lg bg-slate-900 hover:bg-rose-950/40 border border-slate-800 hover:border-rose-600/40 text-slate-300 hover:text-rose-300 transition-all text-left font-medium"
-          >
-            🚨 {t.grade4}
-          </button>
-          <button
-            type="button"
-            onClick={() => handleSelectSample('sample_blurry_fail.jpg', 'Vikram Patel', 1)}
-            className="p-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-600 text-slate-400 hover:text-slate-200 transition-all text-left font-medium"
-          >
-            ⚠️ {t.gradeFail}
-          </button>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          {BENCHMARKS.map((bm) => (
+            <button
+              key={bm.file}
+              type="button"
+              onClick={() => handleSelectSample(bm.file, bm.name, bm.grade, bm.age, bm.gender)}
+              className={`p-2.5 rounded-xl border text-left transition-all flex items-start space-x-2.5 text-xs ${bm.color} hover:shadow-md hover:scale-[1.01]`}
+            >
+              <span className="text-base shrink-0 leading-none mt-0.5">{bm.icon}</span>
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold text-white leading-tight">
+                  {bm.label}
+                </div>
+                <div className="text-[10px] opacity-80 mt-0.5">
+                  {bm.name} • {bm.badge}
+                </div>
+              </div>
+            </button>
+          ))}
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Dropzone */}
+        {/* Compact, Modern Upload Area */}
         <div
           onDragOver={(e) => e.preventDefault()}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
-          className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all ${previewUrl
-              ? 'border-brand-500/50 bg-brand-500/5'
-              : 'border-slate-700 hover:border-slate-600 bg-slate-950/50'
-            }`}
+          className={`border border-dashed rounded-xl p-3.5 sm:p-4 text-center cursor-pointer transition-all ${
+            previewUrl
+              ? 'border-[#35b6ff] bg-[#35b6ff]/10 shadow-[0_0_16px_rgba(53,182,255,0.15)]'
+              : 'border-[rgba(70,170,255,0.3)] hover:border-[#35b6ff] bg-[#04070d]/60 hover:bg-[#081222]/80'
+          }`}
         >
           <input
             ref={fileInputRef}
@@ -160,104 +230,110 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ lang, onAnalyze, i
             onChange={(e) => e.target.files?.[0] && handleFileChange(e.target.files[0])}
           />
           {previewUrl ? (
-            <div className="flex flex-col items-center">
+            <div className="flex items-center space-x-3.5">
               <img
                 src={previewUrl}
                 alt="Retinal Preview"
-                className="w-36 h-36 object-cover rounded-xl border border-slate-700 shadow-md mb-2"
+                className="w-14 h-14 object-cover rounded-xl border border-[#35b6ff]/50 shadow-md shrink-0"
               />
-              <span className="text-xs text-brand-400 font-medium flex items-center space-x-1">
-                <CheckCircle className="w-3.5 h-3.5" />
-                <span>{selectedFile?.name} (Click to change)</span>
-              </span>
+              <div className="text-left min-w-0 flex-1">
+                <div className="text-xs font-bold text-white truncate flex items-center space-x-1.5">
+                  <CheckCircle className="w-3.5 h-3.5 text-[#3dff9a] shrink-0" />
+                  <span className="truncate">{selectedFile?.name}</span>
+                </div>
+                <p className="text-[11px] text-[#35b6ff] mt-0.5 font-medium">Photo loaded • Click to replace</p>
+              </div>
             </div>
           ) : (
-            <div className="flex flex-col items-center py-4">
-              <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 mb-3">
-                <FileUp className="w-6 h-6 text-brand-400" />
+            <div className="flex items-center justify-center space-x-3 py-1">
+              <div className="w-9 h-9 rounded-xl bg-[#35b6ff]/15 border border-[#35b6ff]/35 flex items-center justify-center text-[#35b6ff] shrink-0 shadow-[0_0_10px_rgba(53,182,255,0.2)]">
+                <FileUp className="w-4 h-4" />
               </div>
-              <p className="text-sm font-semibold text-slate-200">
-                Click to browse or drag & drop fundus photo
-              </p>
-              <p className="text-xs text-slate-500 mt-1">
-                Supports DICOM exports, JPG, PNG, TIFF (Min. 512x512 recommended)
-              </p>
+              <div className="text-left">
+                <p className="text-xs font-bold text-white leading-tight">
+                  Click to browse or drag & drop fundus photo
+                </p>
+                <p className="text-[11px] text-[#9ab0c9] mt-0.5">
+                  DICOM exports, JPG, PNG, TIFF (Min. 512×512)
+                </p>
+              </div>
             </div>
           )}
         </div>
 
         {/* Live IQA Pre-check Feedback */}
         {iqaChecking && (
-          <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center space-x-2 text-xs text-slate-400">
-            <RefreshCw className="w-3.5 h-3.5 animate-spin text-brand-400" />
-            <span>Evaluating image clarity, illumination, and retinal aperture...</span>
+          <div className="p-3 bg-[#04070d] border border-[rgba(70,170,255,0.3)] rounded-xl flex items-center space-x-2.5 text-xs text-[#9ab0c9]">
+            <RefreshCw className="w-4 h-4 animate-spin text-[#35b6ff]" />
+            <span>Evaluating retinal aperture, Laplacian sharpness, and luminance...</span>
           </div>
         )}
 
         {iqaResult && !iqaChecking && (
           <div
-            className={`p-3.5 rounded-xl border text-xs ${iqaResult.passed
-                ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300'
-                : 'bg-rose-950/30 border-rose-500/30 text-rose-300'
-              }`}
+            className={`p-3.5 rounded-xl border text-xs ${
+              iqaResult.passed
+                ? 'bg-[#3dff9a]/10 border-[#3dff9a]/40 text-[#3dff9a]'
+                : 'bg-[#ff4d6d]/10 border-[#ff4d6d]/40 text-[#ff4d6d]'
+            }`}
           >
-            <div className="flex items-center space-x-2 font-semibold flex-wrap gap-1">
+            <div className="flex items-center space-x-2 font-bold flex-wrap gap-1">
               {iqaResult.passed ? (
-                <CheckCircle className="w-4 h-4 text-emerald-400" />
+                <CheckCircle className="w-4 h-4 text-[#3dff9a]" />
               ) : (
-                <AlertCircle className="w-4 h-4 text-rose-400" />
+                <AlertCircle className="w-4 h-4 text-[#ff4d6d]" />
               )}
               <span>{iqaResult.passed ? t.iqaPassed : t.iqaFailed}</span>
               {iqaResult.error_codes?.map((code) => (
-                <span key={code} className="px-1.5 py-0.5 rounded bg-rose-900/60 text-white font-mono text-[9px]">
+                <span key={code} className="px-2 py-0.5 rounded bg-rose-950 text-white font-mono text-[9px] border border-rose-800">
                   {code}
                 </span>
               ))}
             </div>
-            <p className="text-[11px] mt-1.5 opacity-90">{iqaResult.feedback}</p>
+            <p className="text-[11px] mt-1 text-slate-300 leading-relaxed">{iqaResult.feedback}</p>
             {iqaResult.recapture_instructions && !iqaResult.passed && (
-              <p className="text-[10px] mt-1.5 text-rose-200 font-semibold bg-rose-900/40 p-2 rounded-lg border border-rose-800/40">
+              <p className="text-[10px] mt-1.5 text-rose-200 font-semibold bg-rose-950/60 p-2 rounded-lg border border-rose-900/60">
                 <b>Recapture Guidance:</b> {iqaResult.recapture_instructions}
               </p>
             )}
-            <div className="grid grid-cols-3 gap-2 mt-2 pt-2 border-t border-slate-800 text-[10px] text-slate-400 font-mono">
-              <div>Sharpness: {iqaResult.blur_score}</div>
-              <div>Luminance: {iqaResult.illumination_score}</div>
-              <div>Contrast: {iqaResult.contrast_score}</div>
+            <div className="grid grid-cols-3 gap-2 mt-2 pt-1.5 border-t border-[rgba(70,170,255,0.15)] text-[10px] text-[#9ab0c9] font-mono">
+              <div>Sharpness: <b className="text-white">{iqaResult.blur_score}</b></div>
+              <div>Luminance: <b className="text-white">{iqaResult.illumination_score}</b></div>
+              <div>Contrast: <b className="text-white">{iqaResult.contrast_score}</b></div>
             </div>
           </div>
         )}
 
-        {/* Patient Metadata Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+        {/* Patient Metadata Inputs */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
           <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">{t.patientName}</label>
+            <label className="block text-xs font-semibold text-[#9ab0c9] mb-1">{t.patientName}</label>
             <input
               type="text"
               value={patientName}
               onChange={(e) => setPatientName(e.target.value)}
               required
-              className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white focus:outline-none focus:border-brand-500"
+              className="w-full px-3.5 py-2 bg-[#04070d]/80 border border-[rgba(70,170,255,0.25)] focus:border-[#35b6ff] rounded-xl text-xs text-white focus:outline-none focus:ring-1 focus:ring-[#35b6ff] transition-all"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1">{t.patientAge}</label>
+              <label className="block text-xs font-semibold text-[#9ab0c9] mb-1">{t.patientAge}</label>
               <input
                 type="number"
                 value={patientAge}
                 onChange={(e) => setPatientAge(Number(e.target.value))}
                 required
-                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white focus:outline-none focus:border-brand-500"
+                className="w-full px-3.5 py-2 bg-[#04070d]/80 border border-[rgba(70,170,255,0.25)] focus:border-[#35b6ff] rounded-xl text-xs text-white focus:outline-none focus:ring-1 focus:ring-[#35b6ff] transition-all"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1">{t.patientGender}</label>
+              <label className="block text-xs font-semibold text-[#9ab0c9] mb-1">{t.patientGender}</label>
               <select
                 value={patientGender}
                 onChange={(e) => setPatientGender(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white focus:outline-none focus:border-brand-500"
+                className="w-full px-3.5 py-2 bg-[#04070d]/80 border border-[rgba(70,170,255,0.25)] focus:border-[#35b6ff] rounded-xl text-xs text-white focus:outline-none focus:ring-1 focus:ring-[#35b6ff] transition-all"
               >
                 <option value="Male">{t.male}</option>
                 <option value="Female">{t.female}</option>
@@ -267,25 +343,27 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ lang, onAnalyze, i
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">{t.eyeSide}</label>
+            <label className="block text-xs font-semibold text-[#9ab0c9] mb-1">{t.eyeSide}</label>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => setEyeSide('RIGHT')}
-                className={`py-2 px-3 rounded-lg border text-xs font-semibold transition-all ${eyeSide === 'RIGHT'
-                    ? 'bg-brand-600/20 border-brand-500 text-brand-300'
-                    : 'bg-slate-950 border-slate-800 text-slate-400'
-                  }`}
+                className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all ${
+                  eyeSide === 'RIGHT'
+                    ? 'bg-[#35b6ff]/20 border-[#35b6ff] text-[#35b6ff] shadow-[0_0_12px_rgba(53,182,255,0.3)]'
+                    : 'bg-[#04070d]/60 border-[rgba(70,170,255,0.15)] text-[#9ab0c9] hover:text-white'
+                }`}
               >
                 {t.rightEye}
               </button>
               <button
                 type="button"
                 onClick={() => setEyeSide('LEFT')}
-                className={`py-2 px-3 rounded-lg border text-xs font-semibold transition-all ${eyeSide === 'LEFT'
-                    ? 'bg-brand-600/20 border-brand-500 text-brand-300'
-                    : 'bg-slate-950 border-slate-800 text-slate-400'
-                  }`}
+                className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all ${
+                  eyeSide === 'LEFT'
+                    ? 'bg-[#35b6ff]/20 border-[#35b6ff] text-[#35b6ff] shadow-[0_0_12px_rgba(53,182,255,0.3)]'
+                    : 'bg-[#04070d]/60 border-[rgba(70,170,255,0.15)] text-[#9ab0c9] hover:text-white'
+                }`}
               >
                 {t.leftEye}
               </button>
@@ -293,28 +371,29 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ lang, onAnalyze, i
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">{t.patientHistory}</label>
+            <label className="block text-xs font-semibold text-[#9ab0c9] mb-1">{t.patientHistory}</label>
             <input
               type="text"
               value={diabetesHistory}
               onChange={(e) => setDiabetesHistory(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white focus:outline-none focus:border-brand-500"
+              className="w-full px-3.5 py-2 bg-[#04070d]/80 border border-[rgba(70,170,255,0.25)] focus:border-[#35b6ff] rounded-xl text-xs text-white focus:outline-none focus:ring-1 focus:ring-[#35b6ff] transition-all"
             />
           </div>
         </div>
 
-        {/* Submit Button */}
+        {/* Submit Screening Analysis Button */}
         <button
           type="submit"
           disabled={!selectedFile || isLoading}
-          className={`w-full mt-2 py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center space-x-2 transition-all shadow-lg ${!selectedFile || isLoading
-              ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-              : 'bg-gradient-to-r from-brand-600 to-cyan-600 hover:from-brand-500 hover:to-cyan-500 text-white shadow-brand-500/25 active:scale-[0.99]'
-            }`}
+          className={`w-full mt-2 py-3 px-5 rounded-xl font-heading font-bold text-sm tracking-wide flex items-center justify-center space-x-2 transition-all shadow-xl ${
+            !selectedFile || isLoading
+              ? 'bg-slate-900 border border-slate-800 text-slate-500 cursor-not-allowed'
+              : 'btn-cyan-glow text-[#04070d] font-black active:scale-[0.99]'
+          }`}
         >
           {isLoading ? (
             <>
-              <RefreshCw className="w-4 h-4 animate-spin" />
+              <RefreshCw className="w-4 h-4 animate-spin text-[#04070d]" />
               <span>{t.analyzing}</span>
             </>
           ) : (
@@ -328,4 +407,3 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ lang, onAnalyze, i
     </div>
   );
 };
-

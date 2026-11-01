@@ -2,26 +2,116 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --bg: #04070d;
+  --fg: #eaf3ff;
+  --mut: #9ab0c9;
+  --cy: #35b6ff;
+  --or: #ff8a3d;
+  --gn: #3dff9a;
+  --gl: rgba(8, 18, 34, 0.74);
+  --ln: rgba(70, 170, 255, 0.25);
+  --ln-glow: rgba(70, 170, 255, 0.6);
+}
+
 @layer base {
   body {
-    @apply bg-slate-900 text-slate-100 antialiased;
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    background-color: var(--bg);
+    color: var(--fg);
+    font-family: 'Manrope', 'Noto Sans Devanagari', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, .font-heading {
+    font-family: 'Unbounded', sans-serif;
   }
 }
 
-/* Custom scrollbars */
+/* Glassmorphism Card Utility */
+.glass-panel {
+  background: var(--gl);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--ln);
+  border-radius: 22px;
+}
+
+.glass-panel-hover {
+  transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.glass-panel-hover:hover {
+  border-color: var(--ln-glow);
+  box-shadow: 0 0 24px rgba(53, 182, 255, 0.15);
+  transform: translateY(-2px);
+}
+
+/* Button & Chip Neon Glow */
+.btn-cyan-glow {
+  background: linear-gradient(135deg, #35b6ff, #0284c7);
+  box-shadow: 0 0 16px rgba(53, 182, 255, 0.35);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.btn-cyan-glow:hover {
+  box-shadow: 0 0 24px rgba(53, 182, 255, 0.65);
+  transform: translateY(-1px);
+}
+
+/* Entry Animation */
+.pop-in {
+  animation: popInAnim 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes popInAnim {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Scanning Reticle & Laser Sweep Animation */
+@keyframes laserSweep {
+  0% {
+    top: 2%;
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    top: 96%;
+    opacity: 0.9;
+  }
+}
+
+.retinal-laser {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #35b6ff, #eaf3ff, #35b6ff, transparent);
+  box-shadow: 0 0 14px #35b6ff, 0 0 28px rgba(53, 182, 255, 0.8);
+  animation: laserSweep 2.4s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+/* High-tech Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #0f172a;
+  background: #04070d;
 }
 ::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: rgba(70, 170, 255, 0.3);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: #35b6ff;
+  box-shadow: 0 0 8px #35b6ff;
 }
-

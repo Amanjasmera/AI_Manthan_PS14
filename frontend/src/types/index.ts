@@ -71,6 +71,7 @@ export interface ScreeningDetail {
   raw_image_url: string;
   preprocessed_image_url?: string;
   iqa: IqaResult;
+  iqa_passed?: boolean;
   prediction?: Prediction;
   lesions?: LesionSummary;
   doctor_review?: DoctorReview;
