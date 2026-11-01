@@ -88,7 +88,7 @@ export const Header: React.FC<HeaderProps> = ({
 
               {/* 5. API Docs */}
               <a
-                href="http://localhost:8000/docs"
+                href={import.meta.env.PROD ? "https://ai-manthan-ps14.onrender.com/docs" : "http://localhost:8000/docs"}
                 target="_blank"
                 rel="noreferrer"
                 className="flex items-center space-x-1.5 px-4 py-2 rounded-full text-[#9ab0c9] hover:text-white hover:bg-slate-800/60 transition-all"
@@ -144,7 +144,7 @@ export const Header: React.FC<HeaderProps> = ({
         </a>
 
         <a
-          href="http://localhost:8000/docs"
+          href={import.meta.env.PROD ? "https://ai-manthan-ps14.onrender.com/docs" : "http://localhost:8000/docs"}
           target="_blank"
           rel="noreferrer"
           className="flex flex-col items-center py-1.5 px-2 rounded-xl text-[#9ab0c9] hover:text-white"
