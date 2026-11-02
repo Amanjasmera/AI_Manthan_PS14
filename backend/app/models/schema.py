@@ -12,6 +12,7 @@ from app.models import (
     ActiveLearningLog,
     Prediction,
     AuditLog,
+    User,
     PatientCreate,
     PatientResponse,
     IqaResult,
@@ -22,6 +23,11 @@ from app.models import (
     ActiveLearningLogResponse,
     BilingualExplanation,
     ScreeningDetailResponse,
+    UserRegisterRequest,
+    UserLoginRequest,
+    UserProfileUpdateRequest,
+    UserResponse,
+    AuthResponse,
 )
 
 __all__ = [
@@ -34,6 +40,7 @@ __all__ = [
     "ActiveLearningLog",
     "Prediction",
     "AuditLog",
+    "User",
     "PatientCreate",
     "PatientResponse",
     "IqaResult",
@@ -44,4 +51,9 @@ __all__ = [
     "ActiveLearningLogResponse",
     "BilingualExplanation",
     "ScreeningDetailResponse",
+    "UserRegisterRequest",
+    "UserLoginRequest",
+    "UserProfileUpdateRequest",
+    "UserResponse",
+    "AuthResponse",
 ]

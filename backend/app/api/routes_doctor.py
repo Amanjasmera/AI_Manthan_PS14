@@ -6,10 +6,11 @@ dataset versioning (Indore_Hub_Active_v1.1), and PyTorch fine-tuning export.
 """
 
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Header, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.core.auth import get_current_user_from_token
 from app.models import (
     DoctorReviewCreate,
     DoctorReviewResponse,
@@ -28,8 +29,17 @@ router = APIRouter(prefix="/screenings", tags=["Doctor Review & Active Learning"
 def submit_doctor_review(
     screening_id: str,
     review_data: DoctorReviewCreate,
+    authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db)
 ):
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split("Bearer ", 1)[1].strip()
+        user = get_current_user_from_token(token, db)
+        if user and user.role != "Doctor":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Doctor privileges required to submit or override clinical evaluations."
+            )
     """
     Submits a clinician's expert evaluation, confirming or overriding
     the AI model's predicted grade, adding clinical notes and referral instructions.

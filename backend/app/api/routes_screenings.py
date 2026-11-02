@@ -191,3 +191,68 @@ def download_screening_report(screening_id: str, db: Session = Depends(get_db)):
         media_type="application/pdf",
         filename=pdf_filename
     )
+
+
+@router.get("/export/excel", summary="Export Screening Registry as Excel (.xlsx)")
+def export_screenings_excel(db: Session = Depends(get_db)):
+    """Generates and downloads the full clinical screening registry in Excel OpenXML (.xlsx) format."""
+    from app.core.excel_exporter import generate_excel_xlsx, extract_registry_rows, SCREENING_REGISTRY_HEADERS
+    from fastapi import Response
+    rows = extract_registry_rows(db)
+    xlsx_bytes = generate_excel_xlsx(SCREENING_REGISTRY_HEADERS, rows)
+    return Response(
+        content=xlsx_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=netra_x_screening_registry.xlsx"}
+    )
+
+
+@router.get("/export/csv", summary="Export Screening Registry as CSV")
+def export_screenings_csv(db: Session = Depends(get_db)):
+    """Generates and downloads the full clinical screening registry in CSV format."""
+    from app.core.excel_exporter import generate_csv, extract_registry_rows, SCREENING_REGISTRY_HEADERS
+    from fastapi import Response
+    rows = extract_registry_rows(db)
+    csv_str = generate_csv(SCREENING_REGISTRY_HEADERS, rows)
+    return Response(
+        content=csv_str.encode("utf-8"),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=netra_x_screening_registry.csv"}
+    )
+
+
+@router.get("/unverified", summary="List Unverified Screenings Requiring Doctor Review")
+def list_unverified_screenings(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    """Retrieves all clinical screenings that have not yet been evaluated by an ophthalmologist."""
+    query = db.query(Screening).filter(
+        (Screening.status != "Doctor Verified") & (Screening.doctor_review == None)
+    ).order_by(Screening.created_at.desc())
+    total = query.count()
+    screenings = query.offset((page - 1) * limit).limit(limit).all()
+    items = []
+    for s in screenings:
+        p = s.patient
+        items.append({
+            "id": s.id,
+            "patient_name": p.full_name if p else "Unknown",
+            "age": p.age if p else None,
+            "gender": p.gender if p else None,
+            "eye_side": s.eye_side,
+            "predicted_grade": s.predicted_grade,
+            "grade_name": s.grade_name,
+            "confidence": s.confidence,
+            "referral_urgency": s.referral_urgency,
+            "status": s.status,
+            "created_at": s.created_at.isoformat() if s.created_at else None,
+            "billing_status": s.billing_status or "₹25 Valid Scan"
+        })
+    return {
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "items": items
+    }

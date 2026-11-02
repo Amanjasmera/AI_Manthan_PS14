@@ -64,6 +64,44 @@ def init_db():
             if "image_path" not in al_cols:
                 conn.execute(text("ALTER TABLE active_learning_logs ADD COLUMN image_path VARCHAR(500)"))
 
+            # Check screenings table additional columns
+            if "doctor_notes" not in screenings_cols:
+                conn.execute(text("ALTER TABLE screenings ADD COLUMN doctor_notes TEXT"))
+
+            # Check users table additional columns
+            res_users = conn.execute(text("PRAGMA table_info(users)"))
+            users_cols = {row[1] for row in res_users.fetchall()}
+            if "is_verified" not in users_cols:
+                conn.execute(text("ALTER TABLE users ADD COLUMN is_verified BOOLEAN DEFAULT 1"))
+
+            # Create compatibility views
+            conn.execute(text("""
+                CREATE VIEW IF NOT EXISTS screening_records AS
+                SELECT 
+                    s.id, 
+                    p.full_name AS patient_name, 
+                    p.age, 
+                    p.gender, 
+                    s.predicted_grade AS dr_grade, 
+                    s.confidence, 
+                    s.status, 
+                    s.doctor_notes 
+                FROM screenings s
+                LEFT JOIN patients p ON s.patient_id = p.id;
+            """))
+
+            conn.execute(text("""
+                CREATE VIEW IF NOT EXISTS users_view AS
+                SELECT 
+                    id, 
+                    full_name AS name, 
+                    email, 
+                    hashed_password AS password_hash, 
+                    role, 
+                    is_verified 
+                FROM users;
+            """))
+
             conn.commit()
     except Exception as mig_err:
         print(f"Notice: SQLite migration check info: {mig_err}")

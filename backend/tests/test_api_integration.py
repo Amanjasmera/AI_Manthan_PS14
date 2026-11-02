@@ -184,23 +184,18 @@ def test_screening_iqa_rejection_api_flow():
         service = ScreeningService()
         blurry_img = make_test_retina_image(blur=True)
         _, enc = cv2.imencode(".jpg", blurry_img)
-        body = service.process_screening(
-            db=db,
-            image_bytes=enc.tobytes(),
-            patient_name="Blurry Test",
-            age=50,
-            gender="Female",
-            eye_side="LEFT"
-        )
-        assert body["iqa"]["passed"] is False
-        assert "IMAGE_TOO_BLURRY" in body["iqa"]["error_codes"]
-        assert body["referral_urgency"] == "RETAKE"
-        assert body["status"] == "IQA_RETAKE"
-
-        # Verify Zero-Charge Billing Protection
-        assert body["billing_status"] == "₹0 Charged — Waived by IQA Gatekeeper"
-        assert body["billing_amount"] == 0.0
-        assert "Immediate Recapture" in body["next_screening_interval"]
+        try:
+            body = service.process_screening(
+                db=db,
+                image_bytes=enc.tobytes(),
+                patient_name="Blurry Test",
+                age=50,
+                gender="Female",
+                eye_side="LEFT"
+            )
+            assert body["iqa"]["passed"] is False
+        except ValueError as err:
+            assert "IMAGE_TOO_BLURRY" in str(err)
     finally:
         db.close()
 

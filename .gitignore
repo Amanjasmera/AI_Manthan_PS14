@@ -44,3 +44,6 @@ Thumbs.db
 .vscode/
 .idea/
 *.log
+
+# Test runtime exports
+backend/exports/netra_x_screening_registry_*

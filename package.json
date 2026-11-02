@@ -2,11 +2,8 @@
   "name": "ai-manthan-ps14",
   "private": true,
   "scripts": {
-    "build": "npm --prefix frontend run build",
+    "build": "npm --prefix frontend install && npm --prefix frontend run build",
     "dev": "npm --prefix frontend run dev",
     "start": "npm --prefix frontend run preview"
-  },
-  "devDependencies": {
-    "vite": "^6.4.5"
   }
 }

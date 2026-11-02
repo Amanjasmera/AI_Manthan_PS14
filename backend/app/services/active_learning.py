@@ -114,7 +114,8 @@ class ActiveLearningService:
             db.add(active_log)
 
         # 3. Update screening status and update risk stratification to match confirmed grade
-        screening.status = "REVIEWED"
+        screening.status = "Doctor Verified"
+        screening.doctor_notes = review_data.clinical_notes or ""
         screening.requires_manual_doctor_review = False  # Clinician review completed, gate fulfilled
         if screening.prediction:
             screening.prediction.requires_manual_doctor_review = False

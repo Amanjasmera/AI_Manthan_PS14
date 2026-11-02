@@ -64,6 +64,7 @@ class Screening(Base):
     # Clinical Status & Referral Urgency
     referral_urgency = Column(String(50), default="ROUTINE", index=True)
     status = Column(String(50), default="ANALYZED", index=True)
+    doctor_notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
     # 3-Tier Commercial & Billing Protection
@@ -319,3 +320,80 @@ class ScreeningDetailResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
+
+# =====================================================================
+# AUTHENTICATION & RBAC MODELS (User, Doctor)
+# =====================================================================
+
+class User(Base):
+    """
+    User account model for Authentication & RBAC.
+    Roles: 'User', 'Doctor'
+    """
+    __tablename__ = "users"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    username = Column(String(60), unique=True, nullable=False, index=True)
+    email = Column(String(120), unique=True, nullable=False, index=True)
+    hashed_password = Column(String(255), nullable=False)
+    full_name = Column(String(120), nullable=False)
+    role = Column(String(20), nullable=False, default="User")  # "User" or "Doctor"
+    license_number = Column(String(60), nullable=True)
+    is_verified = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    @property
+    def name(self):
+        return self.full_name
+
+    @property
+    def password_hash(self):
+        return self.hashed_password
+
+
+class UserRegisterRequest(BaseModel):
+    username: str
+    email: str
+    password: str
+    full_name: str
+    role: str = "User"
+    license_number: Optional[str] = None
+
+
+class UserLoginRequest(BaseModel):
+    username: str
+    password: str
+    role: Optional[str] = None
+
+
+class UserProfileUpdateRequest(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    role: Optional[str] = None
+    license_number: Optional[str] = None
+    current_password: Optional[str] = None
+    new_password: Optional[str] = None
+
+
+class UserResponse(BaseModel):
+    id: str
+    username: str
+    email: str
+    full_name: str
+    role: str
+    license_number: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AuthResponse(BaseModel):
+    token: str
+    user: UserResponse
+
+
+# Backwards compatibility aliases
+ScreeningRecord = Screening
+ScreeningRecords = Screening

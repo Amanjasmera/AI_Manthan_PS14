@@ -6,11 +6,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 UPLOAD_DIR = BASE_DIR / "uploads"
 REPORT_DIR = BASE_DIR / "reports"
 DATA_DIR = BASE_DIR / "data"
+EXPORT_DIR = BASE_DIR / "exports"
 
 # Ensure runtime directories exist
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 REPORT_DIR.mkdir(parents=True, exist_ok=True)
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+EXPORT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Database
 DATABASE_URL = f"sqlite:///{DATA_DIR / 'retinavision.db'}"
@@ -35,4 +37,3 @@ ICDR_CLASSES = {
     3: {"name": "Severe NPDR", "hindi": "गंभीर गैर-प्रोलिफेरेटिव डीआर", "urgency": "URGENT", "risk": "High"},
     4: {"name": "Proliferative DR", "hindi": "प्रोलिफेरेटिव डायबिटिक रेटिनोपैथी (उच्च जोखिम)", "urgency": "URGENT", "risk": "Critical"}
 }
-
