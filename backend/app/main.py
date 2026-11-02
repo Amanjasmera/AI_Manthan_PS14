@@ -1,4 +1,11 @@
+import sys
 from pathlib import Path
+
+# Ensure 'backend' directory is in Python path for direct root imports (Render/Docker compatibility)
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -62,7 +69,11 @@ def serve_file(filename: str):
 
     file_path = UPLOAD_DIR / safe_name
     if not file_path.exists():
-        raise HTTPException(status_code=404, detail=f"File not found: {safe_name}")
+        sample_path = STATIC_DIR / "samples" / safe_name
+        if sample_path.exists():
+            file_path = sample_path
+        else:
+            raise HTTPException(status_code=404, detail=f"File not found: {safe_name}")
 
     suffix = file_path.suffix.lower()
     mime_map = {
