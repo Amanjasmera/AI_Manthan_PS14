@@ -93,22 +93,14 @@ def serve_prototype():
     raise HTTPException(status_code=404, detail="Prototype file not found.")
 
 
-@app.get("/app", response_class=FileResponse, summary="Serve NETRA X Diagnostic Studio App")
-@app.get("/studio", response_class=FileResponse, summary="Serve NETRA X Diagnostic Studio App")
-def serve_app():
-    """Serves the NETRA X React application (Diagnostic Studio)."""
+@app.get("/app", response_class=FileResponse, summary="Serve NETRA X Main Application")
+@app.get("/studio", response_class=FileResponse, summary="Serve NETRA X Main Application")
+@app.get("/", response_class=FileResponse, summary="Serve NETRA X Main Application at Root")
+def serve_main_app():
+    """Serves the primary NETRA X Main Application (React Diagnostic Studio, Registry, Review) at root URL."""
     index_file = STATIC_DIR / "index.html"
     if index_file.exists():
         return FileResponse(str(index_file), media_type="text/html")
-    raise HTTPException(status_code=404, detail="App bundle not found.")
-
-
-@app.get("/", response_class=FileResponse, summary="Serve NETRA X Main Landing Page")
-def serve_root():
-    """Serves the NETRA X 3D Landing Page with direct link to /app."""
-    prototype_file = STATIC_DIR / "final_ui.html"
-    if prototype_file.exists():
-        return FileResponse(str(prototype_file), media_type="text/html")
     return serve_prototype()
 
 
@@ -117,9 +109,6 @@ def serve_spa(full_path: str):
     """Fallback handler for React SPA routing and other static assets."""
     if full_path in ("prototype", "prototype.html", "final_ui.html"):
         return serve_prototype()
-
-    if full_path in ("app", "studio"):
-        return serve_app()
 
     file_candidate = STATIC_DIR / full_path
     if file_candidate.is_file():
