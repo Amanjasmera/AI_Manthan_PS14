@@ -14,3 +14,4 @@ if __name__ == "__main__":
     host = os.environ.get("HOST", "0.0.0.0")
     print(f"Starting RetinaVision-AI on {host}:{port}")
     uvicorn.run("app.main:app", host=host, port=port, reload=False)
+

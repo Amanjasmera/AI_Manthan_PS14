@@ -57,6 +57,117 @@
   transform: translateY(-1px);
 }
 
+/* Primary Action Shimmer for Camp Workers */
+.btn-shimmer {
+  background-size: 220% 100%;
+  background-image: linear-gradient(
+    110deg,
+    #0284c7 0%,
+    #38bdf8 25%,
+    #e0f2fe 50%,
+    #38bdf8 75%,
+    #0284c7 100%
+  );
+  animation: shimmerSweep 3.5s ease-in-out infinite;
+}
+.btn-shimmer:hover {
+  animation-duration: 1.8s;
+  box-shadow: 0 0 28px rgba(56, 189, 248, 0.6);
+}
+
+@keyframes shimmerSweep {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Circular Iris Reveal Animation when image loads */
+@keyframes irisReveal {
+  0% {
+    clip-path: circle(0% at 50% 50%);
+    transform: scale(0.92);
+    filter: brightness(1.3);
+  }
+  100% {
+    clip-path: circle(100% at 50% 50%);
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+.animate-iris-reveal {
+  animation: irisReveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Animated Pulse Ring for Dropzone & Live Elements */
+@keyframes pulseRing {
+  0% {
+    transform: scale(0.97);
+    box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.45);
+  }
+  70% {
+    transform: scale(1.02);
+    box-shadow: 0 0 0 14px rgba(56, 189, 248, 0);
+  }
+  100% {
+    transform: scale(0.97);
+    box-shadow: 0 0 0 0 rgba(56, 189, 248, 0);
+  }
+}
+.animate-pulse-ring {
+  animation: pulseRing 2.4s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+}
+
+/* Rotating Radar Beam & Concentric Pulses for Empty Scanner State */
+@keyframes radarSweep {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+.animate-radar-sweep {
+  animation: radarSweep 5s linear infinite;
+}
+
+@keyframes radarPulse {
+  0%, 100% {
+    transform: scale(0.95);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.95;
+  }
+}
+.animate-radar-pulse {
+  animation: radarPulse 3.2s ease-in-out infinite;
+}
+
+/* Ambient Floating Particles */
+@keyframes floatParticle {
+  0%, 100% {
+    transform: translateY(0px) translateX(0px);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translateY(-9px) translateX(5px);
+    opacity: 0.9;
+  }
+}
+.animate-float-1 {
+  animation: floatParticle 4.2s ease-in-out infinite;
+}
+.animate-float-2 {
+  animation: floatParticle 5.4s ease-in-out infinite 1.2s;
+}
+.animate-float-3 {
+  animation: floatParticle 4.8s ease-in-out infinite 2.1s;
+}
+
 /* Entry Animation */
 .pop-in {
   animation: popInAnim 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
