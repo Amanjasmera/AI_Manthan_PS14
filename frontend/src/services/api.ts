@@ -1,7 +1,7 @@
 import { ScreeningDetail, ScreeningListItem, DoctorReview, SystemHealth, IqaResult, UserProfile, UserRole, UserProfileUpdateRequest, AuthSession } from '../types';
 
-export const BACKEND_URL = (import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'https://ai-manthan-ps14.onrender.com' : '')).replace(/\/$/, '');
-export const API_BASE = `${BACKEND_URL}/api/v1`;
+export const BACKEND_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+export const API_BASE = BACKEND_URL ? `${BACKEND_URL}/api/v1` : '/api/v1';
 
 export async function uploadAndAnalyzeScreening(formData: FormData): Promise<ScreeningDetail> {
   const res = await fetch(`${API_BASE}/screenings/analyze`, {

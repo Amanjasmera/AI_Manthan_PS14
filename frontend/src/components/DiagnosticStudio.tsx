@@ -247,55 +247,75 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
             )}
           </div>
 
-          {/* CARD 2: Suspected Microvascular Candidates (4 Columns with FULL LABELS without word cutoffs) */}
+          {/* CARD 2: Suspected Microvascular Candidates (Clean 2x2 Grid with Zero Text Clipping) */}
           <div className="glass-panel p-5 shadow-xl rounded-2xl border border-[rgba(70,170,255,0.2)] space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-white tracking-wide">
-                Suspected Microvascular Candidates
+                {lang === 'hi' ? 'संभावित सूक्ष्मरक्तवाहिका लक्षण' : 'Suspected Microvascular Candidates'}
               </span>
               <span className="text-[10px] font-mono text-[#35b6ff] bg-[#35b6ff]/10 px-2 py-0.5 rounded border border-[#35b6ff]/30">
                 Morphological CV
               </span>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-              {/* Column 1: Microaneurysms */}
-              <div className="p-3 rounded-xl bg-[#081222]/90 border border-[rgba(70,170,255,0.2)] text-center flex flex-col justify-center">
-                <div className="text-lg font-black text-[#35b6ff] font-mono">
+            <div className="grid grid-cols-2 gap-3">
+              {/* Box 1: Microaneurysms */}
+              <div className="p-3.5 rounded-xl bg-[#081222]/90 border border-[rgba(70,170,255,0.2)] flex items-center justify-between space-x-2">
+                <div>
+                  <div className="text-xs font-bold text-white leading-tight">
+                    Microaneurysms
+                  </div>
+                  <div className="text-[10px] text-[#9ab0c9] mt-0.5">
+                    {lang === 'hi' ? 'सूक्ष्म उभार' : 'Capillary leaks'}
+                  </div>
+                </div>
+                <div className="text-xl font-black text-[#35b6ff] font-mono shrink-0">
                   {lesions?.microaneurysm_count ?? 0}
                 </div>
-                <div className="text-[10px] sm:text-[11px] font-semibold text-[#9ab0c9] mt-1 leading-tight">
-                  Microaneurysms
-                </div>
               </div>
 
-              {/* Column 2: Hemorrhages */}
-              <div className="p-3 rounded-xl bg-[#081222]/90 border border-[rgba(70,170,255,0.2)] text-center flex flex-col justify-center">
-                <div className="text-lg font-black text-[#ff4d6d] font-mono">
+              {/* Box 2: Hemorrhages */}
+              <div className="p-3.5 rounded-xl bg-[#081222]/90 border border-[rgba(70,170,255,0.2)] flex items-center justify-between space-x-2">
+                <div>
+                  <div className="text-xs font-bold text-white leading-tight">
+                    Hemorrhages
+                  </div>
+                  <div className="text-[10px] text-[#9ab0c9] mt-0.5">
+                    {lang === 'hi' ? 'रक्तस्राव धब्बे' : 'Dot-blot blood'}
+                  </div>
+                </div>
+                <div className="text-xl font-black text-[#ff4d6d] font-mono shrink-0">
                   {lesions?.hemorrhage_count ?? 0}
                 </div>
-                <div className="text-[10px] sm:text-[11px] font-semibold text-[#9ab0c9] mt-1 leading-tight">
-                  Hemorrhages
-                </div>
               </div>
 
-              {/* Column 3: Hard Exudates */}
-              <div className="p-3 rounded-xl bg-[#081222]/90 border border-[rgba(70,170,255,0.2)] text-center flex flex-col justify-center">
-                <div className="text-lg font-black text-[#ffb020] font-mono">
+              {/* Box 3: Hard Exudates */}
+              <div className="p-3.5 rounded-xl bg-[#081222]/90 border border-[rgba(70,170,255,0.2)] flex items-center justify-between space-x-2">
+                <div>
+                  <div className="text-xs font-bold text-white leading-tight">
+                    Hard Exudates
+                  </div>
+                  <div className="text-[10px] text-[#9ab0c9] mt-0.5">
+                    {lang === 'hi' ? 'कठोर रिसाव' : 'Lipid deposits'}
+                  </div>
+                </div>
+                <div className="text-xl font-black text-[#ffb020] font-mono shrink-0">
                   {lesions?.hard_exudate_count ?? 0}
                 </div>
-                <div className="text-[10px] sm:text-[11px] font-semibold text-[#9ab0c9] mt-1 leading-tight">
-                  Hard Exudates
-                </div>
               </div>
 
-              {/* Column 4: Soft Exudates */}
-              <div className="p-3 rounded-xl bg-[#081222]/90 border border-[rgba(70,170,255,0.2)] text-center flex flex-col justify-center">
-                <div className="text-lg font-black text-[#ffd166] font-mono">
-                  {lesions?.soft_exudate_count ?? 0}
+              {/* Box 4: Soft Exudates */}
+              <div className="p-3.5 rounded-xl bg-[#081222]/90 border border-[rgba(70,170,255,0.2)] flex items-center justify-between space-x-2">
+                <div>
+                  <div className="text-xs font-bold text-white leading-tight">
+                    Soft Exudates
+                  </div>
+                  <div className="text-[10px] text-[#9ab0c9] mt-0.5">
+                    {lang === 'hi' ? 'नरम धब्बे' : 'Cotton-wool spots'}
+                  </div>
                 </div>
-                <div className="text-[10px] sm:text-[11px] font-semibold text-[#9ab0c9] mt-1 leading-tight">
-                  Soft Exudates
+                <div className="text-xl font-black text-[#ffd166] font-mono shrink-0">
+                  {lesions?.soft_exudate_count ?? 0}
                 </div>
               </div>
             </div>
