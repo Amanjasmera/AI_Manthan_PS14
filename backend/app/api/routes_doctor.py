@@ -35,7 +35,7 @@ def submit_doctor_review(
     if authorization and authorization.startswith("Bearer "):
         token = authorization.split("Bearer ", 1)[1].strip()
         user = get_current_user_from_token(token, db)
-        if user and user.role != "Doctor":
+        if user and user.role.lower() != "doctor":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Doctor privileges required to submit or override clinical evaluations."

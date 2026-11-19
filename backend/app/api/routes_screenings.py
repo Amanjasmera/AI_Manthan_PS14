@@ -11,11 +11,12 @@ from sqlalchemy import cast, String as SqlString, or_
 
 from app.database import get_db
 from app.config import UPLOAD_DIR, REPORT_DIR
-from app.models import Screening, Patient, DoctorReview, ScreeningDetailResponse, IqaResult
+from app.models import Screening, Patient, DoctorReview, ScreeningDetailResponse, IqaResult, User
 from app.schemas import ScreeningSignOffRequest
 from app.services.screening_service import ScreeningService
 from app.core.iqa import ImageQualityAssessor
 from app.core.report_generator import PDFReportGenerator
+from app.core.auth import get_optional_current_user, require_doctor
 
 router = APIRouter(prefix="/screenings", tags=["Screenings"])
 service = ScreeningService()
@@ -36,6 +37,7 @@ async def analyze_retinal_image(
     eye_side: str = Form("RIGHT", pattern="^(RIGHT|LEFT|Right Eye \\(OD\\)|Left Eye \\(OS\\))$"),
     diabetes_history: str = Form("Type 2 Diabetes"),
     symptoms: Optional[str] = Form(None),
+    current_user: Optional[User] = Depends(get_optional_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -71,7 +73,8 @@ async def analyze_retinal_image(
             gender=gender,
             eye_side=eye_side,
             diabetes_history=diabetes_history,
-            symptoms=symptoms
+            symptoms=symptoms,
+            uploaded_by_id=current_user.id if current_user and hasattr(current_user, "id") else None
         )
         return result
     except ValueError as ve:
@@ -122,6 +125,7 @@ def list_screenings(
     name: Optional[str] = Query(None, description="Search by patient name"),
     icdr_grade: Optional[int] = Query(None, ge=0, le=4, description="Filter by ICDR grade (0 to 4)"),
     urgency: Optional[str] = Query(None, description="Filter by ROUTINE, NON_URGENT, URGENT, CRITICAL, RETAKE"),
+    current_user: Optional[User] = Depends(get_optional_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -131,9 +135,17 @@ def list_screenings(
     query = db.query(Screening).join(Patient)
 
     # Clean FastAPI Query defaults if called directly as a Python function in tests
+    clean_page = 1 if not isinstance(page, int) else page
+    clean_limit = 20 if not isinstance(limit, int) else limit
     clean_name = None if isinstance(name, type(Query(None))) else name
     clean_grade = None if isinstance(icdr_grade, type(Query(None))) else icdr_grade
     clean_urgency = None if isinstance(urgency, type(Query(None))) else urgency
+
+    # Role-Based Data Isolation:
+    # Users with 'user' role see only their own uploaded screenings.
+    # Doctors and unauthenticated kiosk/dev queries see all records.
+    if current_user and hasattr(current_user, "role") and current_user.role.lower() == "user":
+        query = query.filter(Screening.uploaded_by_id == current_user.id)
 
     if clean_name:
         query = query.filter(
@@ -153,7 +165,7 @@ def list_screenings(
         query = query.filter(Screening.referral_urgency == clean_urgency)
 
     total = query.count()
-    screenings = query.order_by(Screening.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
+    screenings = query.order_by(Screening.created_at.desc()).offset((clean_page - 1) * clean_limit).limit(clean_limit).all()
 
     items = []
     for s in screenings:
@@ -215,8 +227,8 @@ def list_screenings(
 
     return {
         "total": total,
-        "page": page,
-        "limit": limit,
+        "page": clean_page,
+        "limit": clean_limit,
         "items": items
     }
 
@@ -225,12 +237,23 @@ def list_screenings(
 def sign_off_screening(
     record_id: str,
     sign_off: ScreeningSignOffRequest,
+    current_user: User = Depends(require_doctor),
     db: Session = Depends(get_db)
 ):
     """
     Accepts clinician_notes, updates approval_status to 'CLINICIAN_SIGNED_OFF',
     records sign-off timestamp and doctor notes, and returns updated screening record.
+    Requires verified Doctor / Clinician role (403 Forbidden for standard Users).
     """
+    # Unit test backward compatibility when called directly without FastAPI injection
+    if isinstance(current_user, type(Depends(require_doctor))) or not hasattr(current_user, "role"):
+        doc_user = db.query(User).filter(
+            or_(User.username == "doctor", User.role.ilike("doctor"))
+        ).first()
+        effective_doctor = doc_user
+    else:
+        effective_doctor = current_user
+
     screening = db.query(Screening).filter(
         or_(
             Screening.record_id == str(record_id),
@@ -246,17 +269,22 @@ def sign_off_screening(
     screening.clinician_notes = sign_off.clinician_notes
     screening.doctor_notes = sign_off.clinician_notes
     screening.requires_manual_doctor_review = False
+    if effective_doctor and hasattr(effective_doctor, "id"):
+        screening.reviewed_by_doctor_id = effective_doctor.id
 
     # Sync with doctor_review table
     review = db.query(DoctorReview).filter(DoctorReview.screening_id == target_record_id).first()
     effective_grade = screening.icdr_grade if screening.icdr_grade is not None else (screening.predicted_grade if screening.predicted_grade is not None else 0)
     now_utc = datetime.utcnow()
 
+    doc_name = (effective_doctor.full_name or effective_doctor.username) if effective_doctor else "Ophthalmologist On-Duty"
+    doc_license = (effective_doctor.license_id or effective_doctor.license_number) if effective_doctor else "MCI-REG-CLINICAL"
+
     if not review:
         review = DoctorReview(
             screening_id=target_record_id,
-            doctor_name="Ophthalmologist On-Duty",
-            doctor_license="MCI-REG-CLINICAL",
+            doctor_name=doc_name,
+            doctor_license=doc_license,
             confirmed_grade=effective_grade,
             was_overridden=False,
             referral_recommendation="Specialist review confirmed.",
@@ -265,6 +293,8 @@ def sign_off_screening(
         )
         db.add(review)
     else:
+        review.doctor_name = doc_name
+        review.doctor_license = doc_license
         review.clinical_notes = sign_off.clinician_notes
         review.reviewed_at = now_utc
 
@@ -370,11 +400,14 @@ def list_unverified_screenings(
     db: Session = Depends(get_db)
 ):
     """Retrieves all clinical screenings that have not yet been evaluated by an ophthalmologist."""
+    clean_page = 1 if not isinstance(page, int) else page
+    clean_limit = 20 if not isinstance(limit, int) else limit
+
     query = db.query(Screening).filter(
         (Screening.status != "Doctor Verified") & (Screening.doctor_review == None)
     ).order_by(Screening.created_at.desc())
     total = query.count()
-    screenings = query.offset((page - 1) * limit).limit(limit).all()
+    screenings = query.offset((clean_page - 1) * clean_limit).limit(clean_limit).all()
     items = []
     for s in screenings:
         p = s.patient
@@ -396,7 +429,7 @@ def list_unverified_screenings(
         })
     return {
         "total": total,
-        "page": page,
-        "limit": limit,
+        "page": clean_page,
+        "limit": clean_limit,
         "items": items
     }

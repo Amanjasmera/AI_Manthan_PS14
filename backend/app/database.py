@@ -65,6 +65,22 @@ def init_db():
     and safely handles dialect-specific migrations and compatibility views.
     """
     import app.models  # Ensures all ORM models are registered
+
+    # On SQLite local development, ensure users.id is an INTEGER AUTOINCREMENT PK
+    if engine.dialect.name == "sqlite":
+        try:
+            with engine.connect() as conn:
+                res = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")).fetchone()
+                if res:
+                    info = conn.execute(text("PRAGMA table_info(users)")).fetchall()
+                    id_col = next((r for r in info if r[1] == "id"), None)
+                    if id_col and "INT" not in str(id_col[2]).upper():
+                        conn.execute(text("DROP VIEW IF EXISTS users_view"))
+                        conn.execute(text("DROP TABLE IF EXISTS users"))
+                        conn.commit()
+        except Exception as e:
+            print(f"Notice on SQLite user table upgrade: {e}")
+
     Base.metadata.create_all(bind=engine)
 
     # SQLite/PostgreSQL safe column checks and compatibility views
@@ -83,6 +99,10 @@ def init_db():
                     conn.execute(text("ALTER TABLE screenings ADD COLUMN raw_image_url VARCHAR(500)"))
                 if "heatmap_image_url" not in screenings_cols:
                     conn.execute(text("ALTER TABLE screenings ADD COLUMN heatmap_image_url VARCHAR(500)"))
+                if "uploaded_by_id" not in screenings_cols:
+                    conn.execute(text("ALTER TABLE screenings ADD COLUMN uploaded_by_id INTEGER"))
+                if "reviewed_by_doctor_id" not in screenings_cols:
+                    conn.execute(text("ALTER TABLE screenings ADD COLUMN reviewed_by_doctor_id INTEGER"))
                 
                 res_pat = conn.execute(text("PRAGMA table_info(patients)"))
                 patient_cols = {row[1] for row in res_pat.fetchall()}
@@ -90,6 +110,11 @@ def init_db():
                     conn.execute(text("ALTER TABLE patients ADD COLUMN symptoms TEXT"))
                 if "name" not in patient_cols and "full_name" in patient_cols:
                     conn.execute(text("ALTER TABLE patients ADD COLUMN name VARCHAR(120)"))
+
+                res_users = conn.execute(text("PRAGMA table_info(users)"))
+                user_cols = {row[1] for row in res_users.fetchall()}
+                if "license_id" not in user_cols and user_cols:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN license_id VARCHAR(60)"))
 
                 # Create compatibility views for legacy test assertions
                 conn.execute(text("""

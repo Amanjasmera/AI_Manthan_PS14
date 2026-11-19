@@ -25,7 +25,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
 }) => {
   const [fullName, setFullName] = useState(currentUser.full_name);
   const [email, setEmail] = useState(currentUser.email);
-  const [role, setRole] = useState<UserRole>(currentUser.role);
+  const [role, setRole] = useState<UserRole>((currentUser.role === 'Doctor' || currentUser.role === 'doctor') ? 'Doctor' : 'User');
   const [licenseNumber, setLicenseNumber] = useState(currentUser.license_number || '');
   
   // Password change fields
@@ -41,7 +41,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   useEffect(() => {
     setFullName(currentUser.full_name);
     setEmail(currentUser.email);
-    setRole(currentUser.role);
+    setRole((currentUser.role === 'Doctor' || currentUser.role === 'doctor') ? 'Doctor' : 'User');
     setLicenseNumber(currentUser.license_number || '');
     setCurrentPassword('');
     setNewPassword('');
@@ -150,7 +150,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               </span>
             </div>
             <p className="text-xs text-[#9ab0c9] font-mono mt-0.5">
-              @{currentUser.username} • Account ID: {currentUser.id.slice(0, 8)}
+              @{currentUser.username} • Account ID: {String(currentUser.id).slice(0, 8)}
             </p>
           </div>
         </div>

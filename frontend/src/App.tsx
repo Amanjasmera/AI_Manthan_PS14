@@ -7,9 +7,10 @@ import { DiagnosticStudio } from './components/DiagnosticStudio';
 import { PatientHistoryTable } from './components/PatientHistoryTable';
 import { DoctorReviewModal } from './components/DoctorReviewModal';
 import { ReportModal } from './components/ReportModal';
+import { AuthModal } from './components/AuthModal';
 import { Language } from './utils/language';
-import { ScreeningDetail, ScreeningListItem } from './types';
-import { uploadAndAnalyzeScreening, listScreenings, getScreeningDetail } from './services/api';
+import { ScreeningDetail, ScreeningListItem, UserProfile } from './types';
+import { uploadAndAnalyzeScreening, listScreenings, getScreeningDetail, getStoredUser, clearAuthSession, getCurrentUserProfile } from './services/api';
 import { Stethoscope, AlertTriangle, Eye, ShieldAlert } from 'lucide-react';
 
 const initialPatientState: ActivePatientState = {
@@ -41,6 +42,21 @@ export default function App() {
   // Modals
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [isReportOpen, setIsReportOpen] = useState(false);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+
+  // Authentication & RBAC User State
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => getStoredUser());
+
+  const handleAuthSuccess = (user: UserProfile, _token: string) => {
+    setCurrentUser(user);
+    loadInitialData();
+  };
+
+  const handleLogout = () => {
+    clearAuthSession();
+    setCurrentUser(null);
+    loadInitialData();
+  };
 
   // Fetch initial screening registry list without auto-selecting any screening
   const loadInitialData = async () => {
@@ -147,6 +163,9 @@ export default function App() {
       <Header
         activeTab={activeTab}
         onTabChange={handleTabChange}
+        currentUser={currentUser}
+        onOpenAuth={() => setIsAuthOpen(true)}
+        onLogout={handleLogout}
       />
 
       {/* Main Content Area */}
@@ -244,6 +263,7 @@ export default function App() {
                   <DiagnosticStudio
                     screening={activeScreening}
                     lang={lang}
+                    userRole={currentUser?.role}
                     onOpenReview={() => setIsReviewOpen(true)}
                     onOpenReport={() => setIsReportOpen(true)}
                   />
@@ -356,6 +376,13 @@ export default function App() {
           onClose={() => setIsReportOpen(false)}
         />
       )}
+
+      {/* Role-Based Authentication & Registration Modal */}
+      <AuthModal
+        isOpen={isAuthOpen}
+        onClose={() => setIsAuthOpen(false)}
+        onAuthSuccess={handleAuthSuccess}
+      />
     </div>
   );
 }

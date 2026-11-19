@@ -8,10 +8,12 @@ import { Language, translations } from '../utils/language';
 import { SeverityBadge, UrgencyBadge } from './SeverityBadge';
 import { LayerControls } from './LayerControls';
 import { ProbabilityChart } from './ProbabilityChart';
+import { getUserRole } from '../services/api';
 
 interface DiagnosticStudioProps {
   screening: ScreeningDetail;
   lang: Language;
+  userRole?: string;
   onOpenReview: () => void;
   onOpenReport: () => void;
 }
@@ -19,10 +21,13 @@ interface DiagnosticStudioProps {
 export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
   screening,
   lang,
+  userRole,
   onOpenReview,
   onOpenReport,
 }) => {
   const t = translations[lang];
+  const role = (userRole || getUserRole() || 'user').toLowerCase();
+  const isDoctor = role === 'doctor';
 
   // 2-Tab Layout State: Default is 'simple' (Village-Friendly for health workers & patients)
   const [viewMode, setViewMode] = useState<'simple' | 'clinical'>('simple');
@@ -97,14 +102,24 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
         </div>
 
         <div className="flex items-center space-x-2.5">
-          <button
-            type="button"
-            onClick={onOpenReview}
-            className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-[#081222] hover:bg-[#35b6ff]/20 border border-[#35b6ff]/40 hover:border-[#35b6ff] text-xs font-bold text-white transition-all shadow-[0_0_12px_rgba(53,182,255,0.15)] active:scale-95"
-          >
-            <Stethoscope className="w-4 h-4 text-[#35b6ff]" />
-            <span>{doctor ? 'Update Review' : t.reviewDiagnosis}</span>
-          </button>
+          {isDoctor ? (
+            <button
+              type="button"
+              onClick={onOpenReview}
+              className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-[#081222] hover:bg-[#35b6ff]/20 border border-[#35b6ff]/40 hover:border-[#35b6ff] text-xs font-bold text-white transition-all shadow-[0_0_12px_rgba(53,182,255,0.15)] active:scale-95"
+            >
+              <Stethoscope className="w-4 h-4 text-emerald-400" />
+              <span>{doctor ? 'Update Review' : t.reviewDiagnosis}</span>
+            </button>
+          ) : (
+            <div
+              className="flex items-center space-x-2 px-3 py-2 rounded-xl bg-slate-900/60 border border-slate-700/50 text-xs font-medium text-slate-400 cursor-not-allowed select-none"
+              title="Clinician review and sign-off is restricted to verified ophthalmologists/doctors"
+            >
+              <Stethoscope className="w-3.5 h-3.5 text-slate-500" />
+              <span>Doctor Sign-Off (Locked)</span>
+            </div>
+          )}
 
           <button
             type="button"
@@ -464,15 +479,25 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
             </div>
 
             <div className="flex items-center space-x-2.5 shrink-0">
-              <button
-                type="button"
-                onClick={onOpenReview}
-                className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-sky-600/30 to-cyan-600/30 hover:from-sky-500/40 hover:to-cyan-500/40 border border-sky-400/60 text-xs font-bold text-sky-200 hover:text-white transition-all shadow-[0_0_16px_rgba(56,189,248,0.25)] hover:shadow-[0_0_24px_rgba(56,189,248,0.45)]"
-                title="Open Clinician Review & Sign-Off Modal"
-              >
-                <Stethoscope className="w-4 h-4 text-sky-300" />
-                <span>{doctor ? 'Update Doctor Review' : 'Clinician Review & Sign-Off'}</span>
-              </button>
+              {isDoctor ? (
+                <button
+                  type="button"
+                  onClick={onOpenReview}
+                  className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-sky-600/30 to-cyan-600/30 hover:from-sky-500/40 hover:to-cyan-500/40 border border-sky-400/60 text-xs font-bold text-sky-200 hover:text-white transition-all shadow-[0_0_16px_rgba(56,189,248,0.25)] hover:shadow-[0_0_24px_rgba(56,189,248,0.45)]"
+                  title="Open Clinician Review & Sign-Off Modal"
+                >
+                  <Stethoscope className="w-4 h-4 text-sky-300" />
+                  <span>{doctor ? 'Update Doctor Review' : 'Clinician Review & Sign-Off'}</span>
+                </button>
+              ) : (
+                <div
+                  className="flex items-center space-x-2 px-3.5 py-2 rounded-xl bg-slate-900/60 border border-slate-700/50 text-xs font-medium text-slate-400 cursor-not-allowed select-none"
+                  title="Clinician review and sign-off is restricted to verified ophthalmologists/doctors"
+                >
+                  <Stethoscope className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Doctor Review Locked</span>
+                </div>
+              )}
 
               <button
                 type="button"

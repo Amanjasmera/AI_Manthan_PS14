@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Union
 from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, ForeignKey, Text, JSON
 from sqlalchemy.orm import relationship
 from pydantic import BaseModel, Field
@@ -69,6 +69,10 @@ class Screening(Base):
     heatmap_image_url = Column(String(500), nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, index=True)
 
+    # RBAC Audit Links
+    uploaded_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    reviewed_by_doctor_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+
     # Legacy pipeline & audit columns
     raw_image_path = Column(String(500), nullable=True)
     preprocessed_image_path = Column(String(500), nullable=True)
@@ -133,6 +137,8 @@ class Screening(Base):
         primaryjoin="Screening.record_id == AuditLog.screening_id",
         foreign_keys="[AuditLog.screening_id]"
     )
+    uploaded_by = relationship("User", foreign_keys=[uploaded_by_id], back_populates="uploaded_screenings")
+    reviewed_by_doctor = relationship("User", foreign_keys=[reviewed_by_doctor_id], back_populates="reviewed_screenings")
 
     def __init__(self, **kwargs):
         # Allow legacy code passing string id to set record_id
@@ -451,20 +457,57 @@ class ScreeningDetailResponse(BaseModel):
 
 class User(Base):
     """
-    User account model for Authentication & RBAC.
-    Roles: 'User', 'Doctor'
+    User account model for Authentication & RBAC in PostgreSQL / SQLite.
+    Roles: 'user' (Patient / Camp Worker) or 'doctor' (Ophthalmologist / Clinician)
     """
     __tablename__ = "users"
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    username = Column(String(60), unique=True, nullable=False, index=True)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    full_name = Column(String(120), nullable=False)
     email = Column(String(120), unique=True, nullable=False, index=True)
     hashed_password = Column(String(255), nullable=False)
-    full_name = Column(String(120), nullable=False)
-    role = Column(String(20), nullable=False, default="User")  # "User" or "Doctor"
+    role = Column(String(20), nullable=False, default="user")  # "user" or "doctor"
+    license_id = Column(String(60), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, index=True)
+
+    # Legacy & backwards compatibility columns
+    username = Column(String(60), unique=True, nullable=True, index=True)
     license_number = Column(String(60), nullable=True)
     is_verified = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    uploaded_screenings = relationship(
+        "Screening",
+        foreign_keys="[Screening.uploaded_by_id]",
+        back_populates="uploaded_by"
+    )
+    reviewed_screenings = relationship(
+        "Screening",
+        foreign_keys="[Screening.reviewed_by_doctor_id]",
+        back_populates="reviewed_by_doctor"
+    )
+
+    def __init__(self, **kwargs):
+        # Sync license_id and license_number
+        if "license_id" in kwargs and "license_number" not in kwargs:
+            kwargs["license_number"] = kwargs["license_id"]
+        elif "license_number" in kwargs and "license_id" not in kwargs:
+            kwargs["license_id"] = kwargs["license_number"]
+
+        if "name" in kwargs and "full_name" not in kwargs:
+            kwargs["full_name"] = kwargs["name"]
+
+        if "username" not in kwargs:
+            if "email" in kwargs and kwargs["email"]:
+                kwargs["username"] = kwargs["email"].split("@")[0]
+            elif "full_name" in kwargs:
+                kwargs["username"] = kwargs["full_name"].lower().replace(" ", "_")
+
+        # Allow id passed as int or auto-generated
+        if "id" in kwargs and isinstance(kwargs["id"], str) and not kwargs["id"].isdigit():
+            kwargs.pop("id")
+
+        super().__init__(**kwargs)
 
     @property
     def name(self):
@@ -476,17 +519,20 @@ class User(Base):
 
 
 class UserRegisterRequest(BaseModel):
-    username: str
+    full_name: str
     email: str
     password: str
-    full_name: str
-    role: str = "User"
+    role: str = "user"
+    license_id: Optional[str] = None
+    # Compatibility
+    username: Optional[str] = None
     license_number: Optional[str] = None
 
 
 class UserLoginRequest(BaseModel):
-    username: str
     password: str
+    email: Optional[str] = None
+    username: Optional[str] = None
     role: Optional[str] = None
 
 
@@ -494,18 +540,20 @@ class UserProfileUpdateRequest(BaseModel):
     full_name: Optional[str] = None
     email: Optional[str] = None
     role: Optional[str] = None
+    license_id: Optional[str] = None
     license_number: Optional[str] = None
     current_password: Optional[str] = None
     new_password: Optional[str] = None
 
 
 class UserResponse(BaseModel):
-    id: str
-    username: str
-    email: str
+    id: Union[int, str]
     full_name: str
+    email: str
     role: str
+    license_id: Optional[str] = None
     license_number: Optional[str] = None
+    username: Optional[str] = None
     created_at: datetime
 
     class Config:
@@ -513,7 +561,11 @@ class UserResponse(BaseModel):
 
 
 class AuthResponse(BaseModel):
+    access_token: str
     token: str
+    token_type: str = "bearer"
+    role: str
+    full_name: str
     user: UserResponse
 
 

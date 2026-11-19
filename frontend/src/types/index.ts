@@ -127,14 +127,15 @@ export interface SystemHealth {
 }
 
 
-export type UserRole = 'User' | 'Doctor';
+export type UserRole = 'User' | 'Doctor' | 'user' | 'doctor';
 
 export interface UserProfile {
-  id: string;
-  username: string;
+  id: string | number;
+  username?: string;
   email: string;
   full_name: string;
-  role: UserRole;
+  role: string;
+  license_id?: string;
   license_number?: string;
 }
 
@@ -144,11 +145,16 @@ export interface UserProfileUpdateRequest {
   password?: string;
   current_password?: string;
   new_password?: string;
-  role?: UserRole;
+  role?: string;
+  license_id?: string;
   license_number?: string;
 }
 
 export interface AuthSession {
   token: string;
+  access_token?: string;
+  token_type?: string;
+  role?: string;
+  full_name?: string;
   user: UserProfile;
 }

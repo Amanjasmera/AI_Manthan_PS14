@@ -31,7 +31,8 @@ class ScreeningService:
         gender: str,
         eye_side: str = "RIGHT",
         diabetes_history: str = "Type 2 Diabetes",
-        symptoms: Optional[str] = None
+        symptoms: Optional[str] = None,
+        uploaded_by_id: Optional[int] = None
     ) -> Dict[str, Any]:
         screening_id = str(uuid.uuid4())
 
@@ -154,6 +155,7 @@ class ScreeningService:
             soft_exudates=int(lesion_data.get("soft_exudate_count", 0)),
             approval_status=approval_status,
             clinician_notes=None,
+            uploaded_by_id=uploaded_by_id,
             raw_image_url=raw_url,
             heatmap_image_url=heatmap_url,
             raw_image_path=str(raw_path),
@@ -374,6 +376,8 @@ class ScreeningService:
             "commercial_tier": commercial_tier,
             "systemic_risk": systemic_risk,
             "next_screening_interval": next_screening_interval,
+            "uploaded_by_id": screening.uploaded_by_id,
+            "reviewed_by_doctor_id": screening.reviewed_by_doctor_id,
             "bilingual_explanation": {
                 "en": triage.get("patient_explanation_en", ""),
                 "hi": triage.get("patient_explanation_hi", "")

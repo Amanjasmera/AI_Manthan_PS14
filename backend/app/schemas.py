@@ -75,3 +75,4 @@ class ScreeningDeleteResponse(BaseModel):
     status: str
     record_id: str
     message: str
+

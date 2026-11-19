@@ -19,16 +19,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [mode, setMode] = useState<'login' | 'register'>(initialMode);
   
   // Login fields
-  const [username, setUsername] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
-  const [loginRole, setLoginRole] = useState<UserRole>('User');
+  const [loginRole, setLoginRole] = useState<'user' | 'doctor'>('user');
   
   // Register fields
   const [regFullName, setRegFullName] = useState('');
-  const [regUsername, setRegUsername] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
-  const [regRole, setRegRole] = useState<UserRole>('User');
+  const [regRole, setRegRole] = useState<'user' | 'doctor'>('user');
   const [regLicense, setRegLicense] = useState('');
 
   const [isLoading, setIsLoading] = useState(false);
@@ -38,19 +37,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username || !password) {
-      setError('Please provide both username and password.');
+    if (!identifier || !password) {
+      setError('Please provide email/username and password.');
       return;
     }
 
     setIsLoading(true);
     setError(null);
     try {
-      const session = await loginUser(username, password, loginRole);
+      const session = await loginUser(identifier, password, loginRole);
       onAuthSuccess(session.user, session.token);
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Login failed. Invalid credentials.');
+      setError(err.message || 'Login failed. Please check credentials.');
     } finally {
       setIsLoading(false);
     }
@@ -58,7 +57,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!regFullName || !regUsername || !regEmail || !regPassword) {
+    if (!regFullName || !regEmail || !regPassword) {
       setError('Please fill in all required registration fields.');
       return;
     }
@@ -68,11 +67,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     try {
       const session = await registerUser({
         full_name: regFullName,
-        username: regUsername,
         email: regEmail,
         password: regPassword,
         role: regRole,
-        license_number: regRole === 'Doctor' ? regLicense : undefined,
+        license_id: regRole === 'doctor' ? regLicense : undefined,
       });
       onAuthSuccess(session.user, session.token);
       onClose();
@@ -83,11 +81,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const handleQuickDemo = async (role: UserRole) => {
+  const handleQuickDemo = async (role: 'user' | 'doctor') => {
     setIsLoading(true);
     setError(null);
     try {
-      const session = await demoSwitchRole(role);
+      const session = await demoSwitchRole(role === 'doctor' ? 'Doctor' : 'User');
       onAuthSuccess(session.user, session.token);
       onClose();
     } catch (err: any) {
@@ -99,7 +97,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-      <div className="glass-panel max-w-md w-full p-6 sm:p-7 shadow-2xl relative rounded-[22px] border border-[rgba(70,170,255,0.35)] pop-in">
+      <div className="glass-panel max-w-md w-full p-6 sm:p-7 shadow-2xl relative rounded-[24px] border border-[rgba(70,170,255,0.35)] pop-in bg-[#0c1322]">
         
         {/* Close Button */}
         <button
@@ -120,7 +118,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               NETRA <span className="text-[#35b6ff]">X</span> Authentication
             </h2>
             <p className="text-xs text-[#9ab0c9] font-sans">
-              Role-Based Access Control (RBAC) System
+              Role-Based Access Control (User vs Doctor)
             </p>
           </div>
         </div>
@@ -162,66 +160,50 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         {/* Mode 1: Sign In */}
         {mode === 'login' ? (
           <form onSubmit={handleLoginSubmit} className="space-y-4">
-            {/* Category / Role Selection for Login */}
+            {/* Role Selector Toggle: [ 👤 User / Health Worker ] vs [ 🩺 Doctor / Clinician ] */}
             <div>
               <label className="block text-xs font-semibold text-[#9ab0c9] mb-1.5 font-sans flex items-center justify-between">
-                <span>Select Login Category:</span>
+                <span>Select Portal Role:</span>
                 <span className="text-[10px] text-[#35b6ff] font-mono">
-                  {loginRole === 'Doctor' ? 'Ophthalmologist Portal' : 'Patient / User Portal'}
+                  {loginRole === 'doctor' ? 'Ophthalmologist Portal' : 'Patient / Camp Worker'}
                 </span>
               </label>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => {
-                    setLoginRole('User');
+                    setLoginRole('user');
                     setError(null);
                   }}
-                  className={`p-2.5 rounded-xl border text-left transition-all flex items-center space-x-2.5 ${
-                    loginRole === 'User'
-                      ? 'border-[#35b6ff] bg-[#35b6ff]/15 shadow-[0_0_12px_rgba(53,182,255,0.25)]'
+                  className={`p-2.5 rounded-xl border text-left transition-all flex items-center space-x-2 ${
+                    loginRole === 'user'
+                      ? 'border-[#35b6ff] bg-[#35b6ff]/20 shadow-[0_0_12px_rgba(53,182,255,0.3)] text-white'
                       : 'border-[rgba(70,170,255,0.2)] bg-[rgba(4,12,24,0.6)] text-[#9ab0c9] hover:border-white/30'
                   }`}
                 >
-                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
-                    loginRole === 'User' ? 'bg-[#35b6ff]/20 text-[#35b6ff]' : 'bg-white/5 text-[#9ab0c9]'
-                  }`}>
-                    <UserIcon className="w-4 h-4" />
-                  </div>
+                  <UserIcon className="w-4 h-4 text-[#35b6ff] shrink-0" />
                   <div className="min-w-0">
-                    <div className={`text-xs font-heading font-bold ${loginRole === 'User' ? 'text-white' : 'text-[#9ab0c9]'}`}>
-                      User
-                    </div>
-                    <div className="text-[10px] text-[#9ab0c9] truncate">
-                      Patient
-                    </div>
+                    <div className="text-xs font-heading font-bold leading-tight">User</div>
+                    <div className="text-[10px] text-[#9ab0c9] truncate">Health Worker</div>
                   </div>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => {
-                    setLoginRole('Doctor');
+                    setLoginRole('doctor');
                     setError(null);
                   }}
-                  className={`p-2.5 rounded-xl border text-left transition-all flex items-center space-x-2.5 ${
-                    loginRole === 'Doctor'
-                      ? 'border-[#35b6ff] bg-[#35b6ff]/15 shadow-[0_0_12px_rgba(53,182,255,0.25)]'
+                  className={`p-2.5 rounded-xl border text-left transition-all flex items-center space-x-2 ${
+                    loginRole === 'doctor'
+                      ? 'border-emerald-400 bg-emerald-500/20 shadow-[0_0_12px_rgba(52,211,153,0.3)] text-white'
                       : 'border-[rgba(70,170,255,0.2)] bg-[rgba(4,12,24,0.6)] text-[#9ab0c9] hover:border-white/30'
                   }`}
                 >
-                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
-                    loginRole === 'Doctor' ? 'bg-[#35b6ff]/20 text-[#35b6ff]' : 'bg-white/5 text-[#9ab0c9]'
-                  }`}>
-                    <Stethoscope className="w-4 h-4" />
-                  </div>
+                  <Stethoscope className="w-4 h-4 text-emerald-400 shrink-0" />
                   <div className="min-w-0">
-                    <div className={`text-xs font-heading font-bold ${loginRole === 'Doctor' ? 'text-white' : 'text-[#9ab0c9]'}`}>
-                      Doctor
-                    </div>
-                    <div className="text-[10px] text-[#9ab0c9] truncate">
-                      Clinician
-                    </div>
+                    <div className="text-xs font-heading font-bold leading-tight">Doctor</div>
+                    <div className="text-[10px] text-[#9ab0c9] truncate">Clinician</div>
                   </div>
                 </button>
               </div>
@@ -229,15 +211,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
             <div>
               <label className="block text-xs font-semibold text-[#9ab0c9] mb-1 font-sans">
-                Username or Email
+                Email or Username
               </label>
               <div className="relative">
-                <UserIcon className="w-4 h-4 text-[#9ab0c9] absolute left-3 top-2.5 pointer-events-none" />
+                <Mail className="w-4 h-4 text-[#9ab0c9] absolute left-3 top-2.5 pointer-events-none" />
                 <input
                   type="text"
-                  placeholder="e.g. doctor or user"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="e.g. doctor@netrax.ai or user@netrax.ai"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
                   required
                   className="clinical-input w-full pl-9 pr-3.5 py-2 text-xs"
                 />
@@ -269,39 +251,39 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               {isLoading ? 'Verifying Credentials...' : 'Sign In'}
             </button>
 
-            {/* Quick 1-Click Demo Buttons */}
+            {/* Quick 1-Click Demo Evaluation Buttons */}
             <div className="pt-3 border-t border-[rgba(70,170,255,0.15)] space-y-2">
               <div className="text-[11px] font-mono text-[#9ab0c9] flex items-center justify-between">
-                <span>Quick Evaluation Logins:</span>
+                <span>1-Click Seed Demo Accounts:</span>
                 <span className="text-[#35b6ff] flex items-center space-x-1">
-                  <Sparkles className="w-3 h-3 text-[#ffb020]" />
-                  <span>1-Click</span>
+                  <Sparkles className="w-3 h-3 text-amber-400" />
+                  <span>Instant</span>
                 </span>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  onClick={() => handleQuickDemo('Doctor')}
+                  onClick={() => handleQuickDemo('doctor')}
                   disabled={isLoading}
-                  className="clinical-chip p-2 text-left flex items-center space-x-2 text-xs hover:border-[#35b6ff]"
+                  className="clinical-chip p-2 text-left flex items-center space-x-2 text-xs hover:border-emerald-400 border border-emerald-500/30"
                 >
-                  <Stethoscope className="w-4 h-4 text-[#3dff9a] shrink-0" />
+                  <Stethoscope className="w-4 h-4 text-emerald-400 shrink-0" />
                   <div className="min-w-0">
-                    <div className="font-bold text-white text-[11px] leading-tight">Doctor</div>
-                    <div className="text-[9px] text-[#3dff9a] font-mono">Full Review Access</div>
+                    <div className="font-bold text-white text-[11px] leading-tight">Doctor Demo</div>
+                    <div className="text-[9px] text-emerald-300 font-mono truncate">doctor@netrax.ai</div>
                   </div>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => handleQuickDemo('User')}
+                  onClick={() => handleQuickDemo('user')}
                   disabled={isLoading}
-                  className="clinical-chip p-2 text-left flex items-center space-x-2 text-xs hover:border-[#35b6ff]"
+                  className="clinical-chip p-2 text-left flex items-center space-x-2 text-xs hover:border-[#35b6ff] border border-sky-500/30"
                 >
                   <UserIcon className="w-4 h-4 text-[#35b6ff] shrink-0" />
                   <div className="min-w-0">
-                    <div className="font-bold text-white text-[11px] leading-tight">User</div>
-                    <div className="text-[9px] text-[#ff8a3d] font-mono">Review Locked</div>
+                    <div className="font-bold text-white text-[11px] leading-tight">Worker Demo</div>
+                    <div className="text-[9px] text-sky-300 font-mono truncate">user@netrax.ai</div>
                   </div>
                 </button>
               </div>
@@ -316,7 +298,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </label>
               <input
                 type="text"
-                placeholder="e.g. Dr. Jane Doe"
+                placeholder="e.g. Dr. Rajesh Verma or Asha Worker Priya"
                 value={regFullName}
                 onChange={(e) => setRegFullName(e.target.value)}
                 required
@@ -324,34 +306,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-xs font-semibold text-[#9ab0c9] mb-1 font-sans">
-                  Username
-                </label>
-                <input
-                  type="text"
-                  placeholder="janedoe"
-                  value={regUsername}
-                  onChange={(e) => setRegUsername(e.target.value)}
-                  required
-                  className="clinical-input w-full px-3.5 py-2 text-xs"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#9ab0c9] mb-1 font-sans">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  placeholder="jane@clinic.com"
-                  value={regEmail}
-                  onChange={(e) => setRegEmail(e.target.value)}
-                  required
-                  className="clinical-input w-full px-3.5 py-2 text-xs"
-                />
-              </div>
+            <div>
+              <label className="block text-xs font-semibold text-[#9ab0c9] mb-1 font-sans">
+                Email Address
+              </label>
+              <input
+                type="email"
+                placeholder="clinician@hospital.org"
+                value={regEmail}
+                onChange={(e) => setRegEmail(e.target.value)}
+                required
+                className="clinical-input w-full px-3.5 py-2 text-xs"
+              />
             </div>
 
             <div>
@@ -360,7 +326,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </label>
               <input
                 type="password"
-                placeholder="At least 4 characters"
+                placeholder="At least 6 characters"
                 value={regPassword}
                 onChange={(e) => setRegPassword(e.target.value)}
                 required
@@ -368,18 +334,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               />
             </div>
 
-            {/* Role Selection: User vs Doctor */}
+            {/* Role Selector Toggle: [ 👤 User / Health Worker ] vs [ 🩺 Doctor / Clinician ] */}
             <div>
               <label className="block text-xs font-semibold text-[#eaf3ff] mb-1.5 font-sans flex items-center justify-between">
-                <span>Select Account Role:</span>
+                <span>Select Role / Privileges:</span>
                 <span className="text-[10px] text-[#35b6ff] font-mono">RBAC Authorization</span>
               </label>
               
               <div className="grid grid-cols-2 gap-2">
                 <div
-                  onClick={() => setRegRole('User')}
+                  onClick={() => setRegRole('user')}
                   className={`p-2.5 rounded-xl border cursor-pointer transition-all ${
-                    regRole === 'User'
+                    regRole === 'user'
                       ? 'bg-[#35b6ff]/20 border-[#35b6ff] shadow-[0_0_12px_rgba(53,182,255,0.3)]'
                       : 'bg-[rgba(4,12,24,0.6)] border-[rgba(70,170,255,0.2)] hover:border-[#35b6ff]/50'
                   }`}
@@ -387,42 +353,42 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <div className="flex items-center space-x-2">
                     <UserIcon className="w-4 h-4 text-[#35b6ff]" />
                     <span className="text-xs font-bold text-white font-heading">User</span>
-                    {regRole === 'User' && <Check className="w-3.5 h-3.5 text-[#35b6ff] ml-auto" />}
+                    {regRole === 'user' && <Check className="w-3.5 h-3.5 text-[#35b6ff] ml-auto" />}
                   </div>
                   <p className="text-[10px] text-[#9ab0c9] mt-1 font-sans leading-tight">
-                    Screening & history (Doctor Review locked)
+                    Health Worker / Intake
                   </p>
                 </div>
 
                 <div
-                  onClick={() => setRegRole('Doctor')}
+                  onClick={() => setRegRole('doctor')}
                   className={`p-2.5 rounded-xl border cursor-pointer transition-all ${
-                    regRole === 'Doctor'
-                      ? 'bg-[#3dff9a]/20 border-[#3dff9a] shadow-[0_0_12px_rgba(61,255,154,0.3)]'
-                      : 'bg-[rgba(4,12,24,0.6)] border-[rgba(70,170,255,0.2)] hover:border-[#3dff9a]/50'
+                    regRole === 'doctor'
+                      ? 'bg-emerald-500/20 border-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.3)]'
+                      : 'bg-[rgba(4,12,24,0.6)] border-[rgba(70,170,255,0.2)] hover:border-emerald-500/50'
                   }`}
                 >
                   <div className="flex items-center space-x-2">
-                    <Stethoscope className="w-4 h-4 text-[#3dff9a]" />
+                    <Stethoscope className="w-4 h-4 text-emerald-400" />
                     <span className="text-xs font-bold text-white font-heading">Doctor</span>
-                    {regRole === 'Doctor' && <Check className="w-3.5 h-3.5 text-[#3dff9a] ml-auto" />}
+                    {regRole === 'doctor' && <Check className="w-3.5 h-3.5 text-emerald-400 ml-auto" />}
                   </div>
                   <p className="text-[10px] text-[#9ab0c9] mt-1 font-sans leading-tight">
-                    Ophthalmologist sign-off & queue unlocked
+                    Clinician / Sign-Off
                   </p>
                 </div>
               </div>
             </div>
 
             {/* Optional Medical License if Doctor */}
-            {regRole === 'Doctor' && (
+            {regRole === 'doctor' && (
               <div className="pop-in">
-                <label className="block text-xs font-semibold text-[#3dff9a] mb-1 font-sans">
-                  Medical License / MCI Registration (Optional)
+                <label className="block text-xs font-semibold text-emerald-400 mb-1 font-sans">
+                  Medical License ID (e.g. MCI-OPH-8842)
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. MCI-94821"
+                  placeholder="e.g. MCI-48921"
                   value={regLicense}
                   onChange={(e) => setRegLicense(e.target.value)}
                   className="clinical-input w-full px-3.5 py-2 text-xs"
@@ -435,7 +401,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               disabled={isLoading}
               className="btn-cyan-glow w-full py-2.5 text-xs font-bold font-heading active:scale-95 transition-all mt-3"
             >
-              {isLoading ? 'Creating Account...' : `Register as ${regRole}`}
+              {isLoading ? 'Creating Account...' : `Register as ${regRole === 'doctor' ? 'Doctor / Clinician' : 'User / Health Worker'}`}
             </button>
           </form>
         )}
