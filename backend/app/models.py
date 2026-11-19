@@ -13,38 +13,65 @@ from app.database import Base
 
 class Patient(Base):
     """
-    1. patients table:
-       id, full_name, age, gender, diabetes_history, created_at.
+    1. patients table (Production PostgreSQL Schema):
+       id (Integer PK), name (Index), age, gender, diabetes_history, symptoms, created_at.
     """
     __tablename__ = "patients"
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    full_name = Column(String(120), nullable=False, index=True)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    name = Column(String(120), nullable=False, index=True)
     age = Column(Integer, nullable=False)
     gender = Column(String(20), nullable=False)
     diabetes_history = Column(String(255), default="Type 2 Diabetes")
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    symptoms = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, index=True)
+
+    # Legacy compatibility column
+    full_name = Column(String(120), nullable=True, index=True)
 
     # Relationships
     screenings = relationship("Screening", back_populates="patient", cascade="all, delete-orphan")
 
+    def __init__(self, **kwargs):
+        if "full_name" in kwargs and "name" not in kwargs:
+            kwargs["name"] = kwargs["full_name"]
+        elif "name" in kwargs and "full_name" not in kwargs:
+            kwargs["full_name"] = kwargs["name"]
+        super().__init__(**kwargs)
+
 
 class Screening(Base):
     """
-    2. screenings table:
-       id, patient_id, eye_side, raw_image_path, preprocessed_image_path,
-       iqa_passed, blur_score, illumination_score, contrast_score,
-       predicted_grade, grade_name, confidence, referral_urgency, status, created_at.
+    2. screenings table (Production PostgreSQL Schema):
+       id (Integer PK), record_id (UUID Unique Index), patient_id (Integer FK -> patients.id),
+       eye_side, icdr_grade (0-4), stage_label, model_confidence,
+       entropy, epistemic_uncertainty, aleatoric_uncertainty,
+       hard_exudates, soft_exudates, approval_status, clinician_notes,
+       raw_image_url, heatmap_image_url, created_at.
     """
     __tablename__ = "screenings"
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False, index=True)
-    eye_side = Column(String(10), nullable=False, default="RIGHT")  # LEFT or RIGHT
-    raw_image_path = Column(String(500), nullable=False)
-    preprocessed_image_path = Column(String(500), nullable=True)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    record_id = Column(String(64), unique=True, index=True, default=lambda: str(uuid.uuid4()))
+    patient_id = Column(Integer, ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)
+    eye_side = Column(String(50), nullable=False, default="Right Eye (OD)")
+    icdr_grade = Column(Integer, nullable=False, default=0, index=True)
+    stage_label = Column(String(80), nullable=False, default="No DR")
+    model_confidence = Column(Float, nullable=False, default=0.0)
+    entropy = Column(Float, default=0.0)
+    epistemic_uncertainty = Column(Float, default=0.0)
+    aleatoric_uncertainty = Column(Float, default=0.0)
+    hard_exudates = Column(Integer, default=0)
+    soft_exudates = Column(Integer, default=0)
+    approval_status = Column(String(50), default="AUTO_APPROVED", index=True)
+    clinician_notes = Column(Text, nullable=True)
+    raw_image_url = Column(String(500), nullable=True)
+    heatmap_image_url = Column(String(500), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, index=True)
 
-    # IQA metrics
+    # Legacy pipeline & audit columns
+    raw_image_path = Column(String(500), nullable=True)
+    preprocessed_image_path = Column(String(500), nullable=True)
     iqa_passed = Column(Boolean, default=False, index=True)
     blur_score = Column(Float, default=0.0)
     illumination_score = Column(Float, default=0.0)
@@ -53,21 +80,14 @@ class Screening(Base):
     iqa_error_codes = Column(JSON, default=list)
     iqa_feedback = Column(String(500), default="")
     recapture_instructions = Column(String(500), default="")
-
-    # AI Predictions (Stored directly on screenings for production queries)
     predicted_grade = Column(Integer, nullable=True, index=True)
     grade_name = Column(String(80), nullable=True)
     confidence = Column(Float, nullable=True)
     uncertainty_score = Column(Float, default=0.0)
     requires_manual_doctor_review = Column(Boolean, default=False, index=True)
-
-    # Clinical Status & Referral Urgency
     referral_urgency = Column(String(50), default="ROUTINE", index=True)
     status = Column(String(50), default="ANALYZED", index=True)
     doctor_notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
-
-    # 3-Tier Commercial & Billing Protection
     billing_status = Column(String(100), default="₹25 Valid Scan")
     billing_amount = Column(Float, default=25.0)
     systemic_risk = Column(String(120), default="Low Systemic Risk")
@@ -75,11 +95,89 @@ class Screening(Base):
 
     # Relationships
     patient = relationship("Patient", back_populates="screenings")
-    prediction = relationship("Prediction", uselist=False, back_populates="screening", cascade="all, delete-orphan")
-    lesion = relationship("Lesion", uselist=False, back_populates="screening", cascade="all, delete-orphan")
-    doctor_review = relationship("DoctorReview", uselist=False, back_populates="screening", cascade="all, delete-orphan")
-    active_learning_logs = relationship("ActiveLearningLog", back_populates="screening", cascade="all, delete-orphan")
-    audit_logs = relationship("AuditLog", back_populates="screening", cascade="all, delete-orphan")
+    prediction = relationship(
+        "Prediction",
+        uselist=False,
+        back_populates="screening",
+        cascade="all, delete-orphan",
+        primaryjoin="Screening.record_id == Prediction.screening_id",
+        foreign_keys="[Prediction.screening_id]"
+    )
+    lesion = relationship(
+        "Lesion",
+        uselist=False,
+        back_populates="screening",
+        cascade="all, delete-orphan",
+        primaryjoin="Screening.record_id == Lesion.screening_id",
+        foreign_keys="[Lesion.screening_id]"
+    )
+    doctor_review = relationship(
+        "DoctorReview",
+        uselist=False,
+        back_populates="screening",
+        cascade="all, delete-orphan",
+        primaryjoin="Screening.record_id == DoctorReview.screening_id",
+        foreign_keys="[DoctorReview.screening_id]"
+    )
+    active_learning_logs = relationship(
+        "ActiveLearningLog",
+        back_populates="screening",
+        cascade="all, delete-orphan",
+        primaryjoin="Screening.record_id == ActiveLearningLog.screening_id",
+        foreign_keys="[ActiveLearningLog.screening_id]"
+    )
+    audit_logs = relationship(
+        "AuditLog",
+        back_populates="screening",
+        cascade="all, delete-orphan",
+        primaryjoin="Screening.record_id == AuditLog.screening_id",
+        foreign_keys="[AuditLog.screening_id]"
+    )
+
+    def __init__(self, **kwargs):
+        # Allow legacy code passing string id to set record_id
+        if "record_id" not in kwargs:
+            if "id" in kwargs and isinstance(kwargs["id"], str):
+                kwargs["record_id"] = kwargs.pop("id")
+            else:
+                kwargs["record_id"] = str(uuid.uuid4())
+        elif "id" in kwargs and isinstance(kwargs["id"], str):
+            kwargs["record_id"] = kwargs.pop("id")
+
+        if "icdr_grade" in kwargs and "predicted_grade" not in kwargs:
+            kwargs["predicted_grade"] = kwargs["icdr_grade"]
+        elif "predicted_grade" in kwargs and "icdr_grade" not in kwargs:
+            kwargs["icdr_grade"] = kwargs["predicted_grade"]
+
+        if "stage_label" in kwargs and "grade_name" not in kwargs:
+            kwargs["grade_name"] = kwargs["stage_label"]
+        elif "grade_name" in kwargs and "stage_label" not in kwargs:
+            kwargs["stage_label"] = kwargs["grade_name"]
+
+        if "model_confidence" in kwargs and "confidence" not in kwargs:
+            kwargs["confidence"] = kwargs["model_confidence"]
+        elif "confidence" in kwargs and "model_confidence" not in kwargs:
+            kwargs["model_confidence"] = kwargs["confidence"]
+
+        if "entropy" in kwargs and "uncertainty_score" not in kwargs:
+            kwargs["uncertainty_score"] = kwargs["entropy"]
+        elif "uncertainty_score" in kwargs and "entropy" not in kwargs:
+            kwargs["entropy"] = kwargs["uncertainty_score"]
+
+        if "clinician_notes" in kwargs and "doctor_notes" not in kwargs:
+            kwargs["doctor_notes"] = kwargs["clinician_notes"]
+        elif "doctor_notes" in kwargs and "clinician_notes" not in kwargs:
+            kwargs["clinician_notes"] = kwargs["doctor_notes"]
+
+        if "approval_status" not in kwargs:
+            if kwargs.get("requires_manual_doctor_review"):
+                kwargs["approval_status"] = "MANUAL_REVIEW_REQUIRED"
+            elif kwargs.get("status") == "Doctor Verified":
+                kwargs["approval_status"] = "CLINICIAN_SIGNED_OFF"
+            else:
+                kwargs["approval_status"] = "AUTO_APPROVED"
+
+        super().__init__(**kwargs)
 
     @property
     def lesion_summary(self):
@@ -96,7 +194,7 @@ class Lesion(Base):
     __tablename__ = "lesions"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    screening_id = Column(String(36), ForeignKey("screenings.id"), nullable=False, unique=True, index=True)
+    screening_id = Column(String(64), ForeignKey("screenings.record_id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
     microaneurysm_count = Column(Integer, default=0)
     hemorrhage_count = Column(Integer, default=0)
     hard_exudate_count = Column(Integer, default=0)
@@ -109,7 +207,12 @@ class Lesion(Base):
     method = Column(String(80), default="OPENCV_MORPHOLOGICAL_FALLBACK")
     is_verified_model = Column(Boolean, default=False)
 
-    screening = relationship("Screening", back_populates="lesion")
+    screening = relationship(
+        "Screening",
+        back_populates="lesion",
+        primaryjoin="Screening.record_id == Lesion.screening_id",
+        foreign_keys="[Lesion.screening_id]"
+    )
 
 
 # Alias for backwards compatibility
@@ -125,7 +228,7 @@ class DoctorReview(Base):
     __tablename__ = "doctor_reviews"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    screening_id = Column(String(36), ForeignKey("screenings.id"), nullable=False, unique=True, index=True)
+    screening_id = Column(String(64), ForeignKey("screenings.record_id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
     doctor_name = Column(String(120), nullable=False)
     doctor_license = Column(String(60), default="MCI-REG-AI")
     confirmed_grade = Column(Integer, nullable=False)
@@ -134,7 +237,12 @@ class DoctorReview(Base):
     clinical_notes = Column(Text, default="")
     reviewed_at = Column(DateTime, default=datetime.utcnow)
 
-    screening = relationship("Screening", back_populates="doctor_review")
+    screening = relationship(
+        "Screening",
+        back_populates="doctor_review",
+        primaryjoin="Screening.record_id == DoctorReview.screening_id",
+        foreign_keys="[DoctorReview.screening_id]"
+    )
 
 
 class ActiveLearningLog(Base):
@@ -146,7 +254,7 @@ class ActiveLearningLog(Base):
     __tablename__ = "active_learning_logs"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    screening_id = Column(String(36), ForeignKey("screenings.id"), nullable=False, index=True)
+    screening_id = Column(String(64), ForeignKey("screenings.record_id", ondelete="CASCADE"), nullable=False, index=True)
     verified_label = Column(Integer, nullable=False)
     dataset_tag = Column(String(100), default="Indore_Hub_Active_v1.1", nullable=False)
     ai_predicted_grade = Column(Integer, nullable=True)
@@ -157,7 +265,12 @@ class ActiveLearningLog(Base):
     image_path = Column(String(500), nullable=True)
     updated_at = Column(DateTime, default=datetime.utcnow, index=True)
 
-    screening = relationship("Screening", back_populates="active_learning_logs")
+    screening = relationship(
+        "Screening",
+        back_populates="active_learning_logs",
+        primaryjoin="Screening.record_id == ActiveLearningLog.screening_id",
+        foreign_keys="[ActiveLearningLog.screening_id]"
+    )
 
 
 class Prediction(Base):
@@ -167,7 +280,7 @@ class Prediction(Base):
     __tablename__ = "predictions"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    screening_id = Column(String(36), ForeignKey("screenings.id"), nullable=False, unique=True)
+    screening_id = Column(String(64), ForeignKey("screenings.record_id", ondelete="CASCADE"), nullable=False, unique=True)
     predicted_grade = Column(Integer, nullable=False, index=True)  # 0 to 4
     grade_name = Column(String(80), nullable=False)
     confidence = Column(Float, nullable=False)
@@ -185,7 +298,12 @@ class Prediction(Base):
     model_provenance = Column(String(200), default="EfficientNet-B0 (APTOS 2019 Checkpoint)")
     is_verified_checkpoint = Column(Boolean, default=True)
 
-    screening = relationship("Screening", back_populates="prediction")
+    screening = relationship(
+        "Screening",
+        back_populates="prediction",
+        primaryjoin="Screening.record_id == Prediction.screening_id",
+        foreign_keys="[Prediction.screening_id]"
+    )
 
 
 class AuditLog(Base):
@@ -195,12 +313,17 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    screening_id = Column(String(36), ForeignKey("screenings.id"), nullable=False, index=True)
+    screening_id = Column(String(64), ForeignKey("screenings.record_id", ondelete="CASCADE"), nullable=False, index=True)
     event_type = Column(String(50), nullable=False)
     details = Column(String(500), default="")
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
 
-    screening = relationship("Screening", back_populates="audit_logs")
+    screening = relationship(
+        "Screening",
+        back_populates="audit_logs",
+        primaryjoin="Screening.record_id == AuditLog.screening_id",
+        foreign_keys="[AuditLog.screening_id]"
+    )
 
 
 # =====================================================================

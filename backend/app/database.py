@@ -1,16 +1,58 @@
+import os
+from pathlib import Path
+from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import declarative_base, sessionmaker
-from app.config import DATABASE_URL
 
-engine = create_engine(
-    DATABASE_URL, 
-    connect_args={"check_same_thread": False}
-)
+# Load environment variables from .env file
+# Check root directory first, then current backend directory
+root_dir = Path(__file__).resolve().parent.parent.parent
+env_candidates = [root_dir / ".env", Path(__file__).resolve().parent.parent / ".env"]
+for env_file in env_candidates:
+    if env_file.exists():
+        load_dotenv(dotenv_path=env_file)
+        break
+else:
+    load_dotenv()
+
+# Read DATABASE_URL from environment (PostgreSQL production URL)
+raw_db_url = os.environ.get("DATABASE_URL")
+
+if raw_db_url:
+    # Render and Heroku use postgres://, SQLAlchemy 1.4+ / 2.0 requires postgresql://
+    if raw_db_url.startswith("postgres://"):
+        DATABASE_URL = raw_db_url.replace("postgres://", "postgresql://", 1)
+    else:
+        DATABASE_URL = raw_db_url
+else:
+    # Reliable local fallback to SQLite if PostgreSQL is not configured
+    data_dir = Path(__file__).resolve().parent.parent / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    DATABASE_URL = f"sqlite:///{data_dir / 'retinal_screening.db'}"
+
+# Configure production engine with connection pooling
+if DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False}
+    )
+else:
+    # Production PostgreSQL connection with connection pooling & ping verification
+    engine = create_engine(
+        DATABASE_URL,
+        pool_pre_ping=True,
+        pool_size=10,
+        max_overflow=20
+    )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 def get_db():
+    """
+    FastAPI dependency that yields a SQLAlchemy database session per request
+    and ensures it is cleanly closed after request completion.
+    """
     db = SessionLocal()
     try:
         yield db
@@ -19,89 +61,63 @@ def get_db():
 
 def init_db():
     """
-    Initializes production SQLite database schema for all models and
-    safely adds new columns if they do not exist in existing database files.
+    Auto-creates all database tables on application startup
+    and safely handles dialect-specific migrations and compatibility views.
     """
-    import app.models  # Ensures all tables are imported into Base.metadata
+    import app.models  # Ensures all ORM models are registered
     Base.metadata.create_all(bind=engine)
 
-    # Safe column migrations for existing SQLite database instances
+    # SQLite/PostgreSQL safe column checks and compatibility views
     try:
         with engine.connect() as conn:
-            # Check screenings table
-            res = conn.execute(text("PRAGMA table_info(screenings)"))
-            screenings_cols = {row[1] for row in res.fetchall()}
-            if "uncertainty_score" not in screenings_cols:
-                conn.execute(text("ALTER TABLE screenings ADD COLUMN uncertainty_score FLOAT DEFAULT 0.0"))
-            if "requires_manual_doctor_review" not in screenings_cols:
-                conn.execute(text("ALTER TABLE screenings ADD COLUMN requires_manual_doctor_review BOOLEAN DEFAULT 0"))
+            if engine.dialect.name == "sqlite":
+                res = conn.execute(text("PRAGMA table_info(screenings)"))
+                screenings_cols = {row[1] for row in res.fetchall()}
+                if "record_id" not in screenings_cols:
+                    conn.execute(text("ALTER TABLE screenings ADD COLUMN record_id VARCHAR(64)"))
+                if "approval_status" not in screenings_cols:
+                    conn.execute(text("ALTER TABLE screenings ADD COLUMN approval_status VARCHAR(50) DEFAULT 'AUTO_APPROVED'"))
+                if "clinician_notes" not in screenings_cols:
+                    conn.execute(text("ALTER TABLE screenings ADD COLUMN clinician_notes TEXT"))
+                if "raw_image_url" not in screenings_cols:
+                    conn.execute(text("ALTER TABLE screenings ADD COLUMN raw_image_url VARCHAR(500)"))
+                if "heatmap_image_url" not in screenings_cols:
+                    conn.execute(text("ALTER TABLE screenings ADD COLUMN heatmap_image_url VARCHAR(500)"))
+                
+                res_pat = conn.execute(text("PRAGMA table_info(patients)"))
+                patient_cols = {row[1] for row in res_pat.fetchall()}
+                if "symptoms" not in patient_cols:
+                    conn.execute(text("ALTER TABLE patients ADD COLUMN symptoms TEXT"))
+                if "name" not in patient_cols and "full_name" in patient_cols:
+                    conn.execute(text("ALTER TABLE patients ADD COLUMN name VARCHAR(120)"))
 
-            # Check predictions table
-            res_pred = conn.execute(text("PRAGMA table_info(predictions)"))
-            pred_cols = {row[1] for row in res_pred.fetchall()}
-            if "uncertainty_score" not in pred_cols:
-                conn.execute(text("ALTER TABLE predictions ADD COLUMN uncertainty_score FLOAT DEFAULT 0.0"))
-            if "requires_manual_doctor_review" not in pred_cols:
-                conn.execute(text("ALTER TABLE predictions ADD COLUMN requires_manual_doctor_review BOOLEAN DEFAULT 0"))
-            if "epistemic_uncertainty" not in pred_cols:
-                conn.execute(text("ALTER TABLE predictions ADD COLUMN epistemic_uncertainty FLOAT DEFAULT 0.0"))
-            if "aleatoric_uncertainty" not in pred_cols:
-                conn.execute(text("ALTER TABLE predictions ADD COLUMN aleatoric_uncertainty FLOAT DEFAULT 0.0"))
+                # Create compatibility views for legacy test assertions
+                conn.execute(text("""
+                    CREATE VIEW IF NOT EXISTS screening_records AS
+                    SELECT 
+                        s.record_id AS id, 
+                        COALESCE(p.name, p.full_name) AS patient_name, 
+                        p.age, 
+                        p.gender, 
+                        COALESCE(s.icdr_grade, s.predicted_grade) AS dr_grade, 
+                        COALESCE(s.model_confidence, s.confidence) AS confidence, 
+                        s.status, 
+                        COALESCE(s.clinician_notes, s.doctor_notes) AS doctor_notes 
+                    FROM screenings s
+                    LEFT JOIN patients p ON s.patient_id = p.id;
+                """))
 
-            # Check active_learning_logs table
-            res_al = conn.execute(text("PRAGMA table_info(active_learning_logs)"))
-            al_cols = {row[1] for row in res_al.fetchall()}
-            if "ai_predicted_grade" not in al_cols:
-                conn.execute(text("ALTER TABLE active_learning_logs ADD COLUMN ai_predicted_grade INTEGER"))
-            if "was_overridden" not in al_cols:
-                conn.execute(text("ALTER TABLE active_learning_logs ADD COLUMN was_overridden BOOLEAN DEFAULT 0"))
-            if "doctor_name" not in al_cols:
-                conn.execute(text("ALTER TABLE active_learning_logs ADD COLUMN doctor_name VARCHAR(120)"))
-            if "clinical_notes" not in al_cols:
-                conn.execute(text("ALTER TABLE active_learning_logs ADD COLUMN clinical_notes TEXT DEFAULT ''"))
-            if "uncertainty_score" not in al_cols:
-                conn.execute(text("ALTER TABLE active_learning_logs ADD COLUMN uncertainty_score FLOAT DEFAULT 0.0"))
-            if "image_path" not in al_cols:
-                conn.execute(text("ALTER TABLE active_learning_logs ADD COLUMN image_path VARCHAR(500)"))
-
-            # Check screenings table additional columns
-            if "doctor_notes" not in screenings_cols:
-                conn.execute(text("ALTER TABLE screenings ADD COLUMN doctor_notes TEXT"))
-
-            # Check users table additional columns
-            res_users = conn.execute(text("PRAGMA table_info(users)"))
-            users_cols = {row[1] for row in res_users.fetchall()}
-            if "is_verified" not in users_cols:
-                conn.execute(text("ALTER TABLE users ADD COLUMN is_verified BOOLEAN DEFAULT 1"))
-
-            # Create compatibility views
-            conn.execute(text("""
-                CREATE VIEW IF NOT EXISTS screening_records AS
-                SELECT 
-                    s.id, 
-                    p.full_name AS patient_name, 
-                    p.age, 
-                    p.gender, 
-                    s.predicted_grade AS dr_grade, 
-                    s.confidence, 
-                    s.status, 
-                    s.doctor_notes 
-                FROM screenings s
-                LEFT JOIN patients p ON s.patient_id = p.id;
-            """))
-
-            conn.execute(text("""
-                CREATE VIEW IF NOT EXISTS users_view AS
-                SELECT 
-                    id, 
-                    full_name AS name, 
-                    email, 
-                    hashed_password AS password_hash, 
-                    role, 
-                    is_verified 
-                FROM users;
-            """))
-
-            conn.commit()
-    except Exception as mig_err:
-        print(f"Notice: SQLite migration check info: {mig_err}")
+                conn.execute(text("""
+                    CREATE VIEW IF NOT EXISTS users_view AS
+                    SELECT 
+                        id, 
+                        full_name AS name, 
+                        email, 
+                        hashed_password AS password_hash, 
+                        role, 
+                        is_verified 
+                    FROM users;
+                """))
+                conn.commit()
+    except Exception as e:
+        print(f"Notice: database initialization / view setup: {e}")

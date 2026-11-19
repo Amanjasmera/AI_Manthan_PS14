@@ -57,7 +57,7 @@ def create_dummy_screening(db: Session, predicted_grade: int = 1, uncertainty: f
     cv2.imwrite(str(prep_path), dummy_img)
 
     s = Screening(
-        id=s_id,
+        record_id=s_id,
         patient_id=p.id,
         eye_side="RIGHT",
         raw_image_path=str(raw_path),
@@ -131,7 +131,7 @@ def test_doctor_review_confirmation():
         assert al_log.doctor_name == "Dr. Priya Sharma, MS"
 
         # Check screening status was updated
-        screening = db.query(Screening).filter(Screening.id == s_id).first()
+        screening = db.query(Screening).filter((Screening.record_id == s_id) | (Screening.id == s_id)).first()
         assert screening.status in ["REVIEWED", "Doctor Verified"]
         assert screening.requires_manual_doctor_review is False
 
@@ -174,7 +174,7 @@ def test_doctor_review_override():
         assert "hard exudates" in al_log.clinical_notes
 
         # Verify risk triage updated to Grade 2 (Moderate NPDR)
-        screening = db.query(Screening).filter(Screening.id == s_id).first()
+        screening = db.query(Screening).filter((Screening.record_id == s_id) | (Screening.id == s_id)).first()
         assert screening.status in ["REVIEWED", "Doctor Verified"]
         assert screening.requires_manual_doctor_review is False
         assert screening.referral_urgency in ["NON_URGENT", "URGENT"]

@@ -191,7 +191,7 @@ def extract_registry_rows(db: Session) -> List[List[Any]]:
         status_label = "Doctor Verified" if is_verified else (s.status or "Pending")
 
         rows.append([
-            s.id,
+            s.record_id or str(s.id),
             patient_name,
             age,
             gender,

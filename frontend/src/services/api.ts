@@ -51,6 +51,60 @@ export async function listScreenings(page = 1, limit = 20, urgency?: string): Pr
   return res.json();
 }
 
+export async function signOffScreening(
+  recordId: string,
+  clinicianNotes: string
+): Promise<{ status: string; record_id: string; approval_status: string; clinician_notes: string; updated_at: string; screening: ScreeningDetail }> {
+  const res = await fetch(`${API_BASE}/screenings/${recordId}/sign-off`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clinician_notes: clinicianNotes }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Clinician sign-off failed.');
+  }
+  return res.json();
+}
+
+export async function deleteScreening(recordId: string): Promise<{ status: string; record_id: string; message: string }> {
+  const res = await fetch(`${API_BASE}/screenings/${recordId}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to delete screening record.');
+  }
+  return res.json();
+}
+
+export async function listPostgresScreenings(
+  page = 1,
+  limit = 20,
+  name?: string,
+  icdrGrade?: number,
+  urgency?: string
+): Promise<{ total: number; page: number; limit: number; items: ScreeningListItem[] }> {
+  const origin = BACKEND_URL || window.location.origin;
+  const url = new URL(`${origin}/api/screenings`);
+  url.searchParams.append('page', page.toString());
+  url.searchParams.append('limit', limit.toString());
+  if (name) {
+    url.searchParams.append('name', name);
+  }
+  if (icdrGrade !== undefined && icdrGrade !== null) {
+    url.searchParams.append('icdr_grade', icdrGrade.toString());
+  }
+  if (urgency) {
+    url.searchParams.append('urgency', urgency);
+  }
+  const res = await fetch(url.toString());
+  if (!res.ok) {
+    throw new Error('Failed to fetch screenings from database');
+  }
+  return res.json();
+}
+
 export async function submitDoctorReview(
   screeningId: string,
   review: {

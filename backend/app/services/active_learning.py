@@ -10,7 +10,7 @@ learning cycle tagged for regional Indian clinical deployment (Indore Hub v1.1).
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_, cast, String as SqlString
 
 from app.models import (
     Screening,
@@ -46,18 +46,29 @@ class ActiveLearningService:
         the AI grade, updates clinical triage, generates active learning records,
         and regenerates the bilingual PDF report.
         """
-        screening = db.query(Screening).filter(Screening.id == screening_id).first()
+        screening = db.query(Screening).filter(
+            or_(
+                Screening.record_id == str(screening_id),
+                cast(Screening.id, SqlString) == str(screening_id)
+            )
+        ).first()
         if not screening:
             raise ValueError(f"Screening record {screening_id} not found.")
 
+        target_id = screening.record_id or str(screening.id)
         pred = screening.prediction
-        ai_grade = pred.predicted_grade if pred else screening.predicted_grade
+        ai_grade = pred.predicted_grade if pred else (screening.predicted_grade or screening.icdr_grade)
         confirmed_grade = int(review_data.confirmed_grade)
         was_overridden = bool(ai_grade is not None and ai_grade != confirmed_grade)
         version_tag = dataset_tag or review_data.dataset_tag or DEFAULT_DATASET_VERSION_TAG
 
         # 1. Update or create DoctorReview
-        doctor_review = db.query(DoctorReview).filter(DoctorReview.screening_id == screening_id).first()
+        doctor_review = db.query(DoctorReview).filter(
+            or_(
+                DoctorReview.screening_id == target_id,
+                DoctorReview.screening_id == str(screening_id)
+            )
+        ).first()
         if doctor_review:
             doctor_review.doctor_name = review_data.doctor_name
             doctor_review.doctor_license = review_data.doctor_license or "MCI-REG-AI"
@@ -70,7 +81,7 @@ class ActiveLearningService:
             doctor_review.reviewed_at = datetime.utcnow()
         else:
             doctor_review = DoctorReview(
-                screening_id=screening_id,
+                screening_id=target_id,
                 doctor_name=review_data.doctor_name,
                 doctor_license=review_data.doctor_license or "MCI-REG-AI",
                 confirmed_grade=confirmed_grade,
@@ -84,7 +95,12 @@ class ActiveLearningService:
             db.add(doctor_review)
 
         # 2. Record Active Learning Log with dynamic dataset version tag
-        active_log = db.query(ActiveLearningLog).filter(ActiveLearningLog.screening_id == screening_id).first()
+        active_log = db.query(ActiveLearningLog).filter(
+            or_(
+                ActiveLearningLog.screening_id == target_id,
+                ActiveLearningLog.screening_id == str(screening_id)
+            )
+        ).first()
         image_path = screening.preprocessed_image_path or screening.raw_image_path
         uncertainty_score = float(screening.uncertainty_score or (pred.entropy if pred else 0.0))
 
@@ -100,7 +116,7 @@ class ActiveLearningService:
             active_log.updated_at = datetime.utcnow()
         else:
             active_log = ActiveLearningLog(
-                screening_id=screening_id,
+                screening_id=target_id,
                 verified_label=confirmed_grade,
                 dataset_tag=version_tag,
                 ai_predicted_grade=ai_grade,
@@ -115,7 +131,9 @@ class ActiveLearningService:
 
         # 3. Update screening status and update risk stratification to match confirmed grade
         screening.status = "Doctor Verified"
+        screening.approval_status = "CLINICIAN_SIGNED_OFF"
         screening.doctor_notes = review_data.clinical_notes or ""
+        screening.clinician_notes = review_data.clinical_notes or ""
         screening.requires_manual_doctor_review = False  # Clinician review completed, gate fulfilled
         if screening.prediction:
             screening.prediction.requires_manual_doctor_review = False
@@ -128,7 +146,7 @@ class ActiveLearningService:
         # 4. Audit Log
         override_note = f"OVERRIDDEN from Grade {ai_grade}" if was_overridden else "CONFIRMED AI prediction"
         audit = AuditLog(
-            screening_id=screening_id,
+            screening_id=target_id,
             event_type="DOCTOR_REVIEW",
             details=(
                 f"Dr. {review_data.doctor_name} ({review_data.doctor_license}) verified Grade {confirmed_grade} "
@@ -143,9 +161,9 @@ class ActiveLearningService:
         # 5. Regenerate PDF report with doctor's clinical review included
         try:
             from app.services.screening_service import ScreeningService
-            screening_dict = ScreeningService.get_screening_dict(db, screening_id)
+            screening_dict = ScreeningService.get_screening_dict(db, target_id)
             if screening_dict:
-                pdf_filename = f"RetinaVision_Report_{screening_id}.pdf"
+                pdf_filename = f"RetinaVision_Report_{target_id}.pdf"
                 PDFReportGenerator.generate_report(screening_dict, pdf_filename)
         except Exception as pdf_err:
             print(f"Notice: PDF update notice on review: {pdf_err}")

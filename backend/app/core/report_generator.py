@@ -58,8 +58,8 @@ class PDFReportGenerator:
         it pulls structured data directly from the SQLite database.
         """
         # 1. Resolve structured data
-        if isinstance(screening_data_or_id, str):
-            screening_id = screening_data_or_id
+        if isinstance(screening_data_or_id, (str, int)):
+            screening_id = str(screening_data_or_id)
             if db is not None:
                 from app.services.screening_service import ScreeningService
                 screening_data = ScreeningService.get_screening_dict(db, screening_id)

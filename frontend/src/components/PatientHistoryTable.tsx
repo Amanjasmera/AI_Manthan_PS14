@@ -18,11 +18,16 @@ export const PatientHistoryTable: React.FC<PatientHistoryTableProps> = ({
   const t = translations[lang];
   const [searchTerm, setSearchTerm] = useState('');
   const [filterUrgency, setFilterUrgency] = useState<string>('ALL');
+  const [filterGrade, setFilterGrade] = useState<string>('ALL');
 
   const filtered = screenings.filter((item) => {
     const matchName = item.patient_name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchUrgency = filterUrgency === 'ALL' || item.referral_urgency === filterUrgency;
-    return matchName && matchUrgency;
+    const effectiveGrade = item.confirmed_grade !== null && item.confirmed_grade !== undefined
+      ? item.confirmed_grade
+      : item.predicted_grade;
+    const matchGrade = filterGrade === 'ALL' || effectiveGrade.toString() === filterGrade;
+    return matchName && matchUrgency && matchGrade;
   });
 
   return (
@@ -35,28 +40,42 @@ export const PatientHistoryTable: React.FC<PatientHistoryTableProps> = ({
             <span>{t.navHistory}</span>
           </h2>
           <p className="text-xs text-[#9ab0c9] mt-0.5">
-            Longitudinal records, community screening logs & ophthalmology referrals
+            PostgreSQL clinical records, community screening logs & ophthalmology referrals
           </p>
         </div>
 
-        <div className="flex items-center space-x-2 w-full sm:w-auto">
+        <div className="flex items-center space-x-2 w-full sm:w-auto flex-wrap gap-y-2">
           {/* Search Input */}
-          <div className="relative flex-1 sm:w-64">
+          <div className="relative flex-1 sm:w-56">
             <Search className="w-4 h-4 text-[#9ab0c9] absolute left-3 top-3" />
             <input
               type="text"
               placeholder="Search patient name..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-3 py-2.5 bg-[#081222] border border-[rgba(70,170,255,0.25)] rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-[#35b6ff] transition-all"
+              className="w-full pl-9 pr-3 py-2 bg-[#081222] border border-[rgba(70,170,255,0.25)] rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-[#35b6ff] transition-all"
             />
           </div>
+
+          {/* Grade Filter Dropdown */}
+          <select
+            value={filterGrade}
+            onChange={(e) => setFilterGrade(e.target.value)}
+            className="px-3 py-2 bg-[#081222] border border-[rgba(70,170,255,0.25)] rounded-xl text-xs text-slate-300 focus:outline-none focus:border-[#35b6ff] transition-all"
+          >
+            <option value="ALL">All ICDR Grades</option>
+            <option value="0">Grade 0: Normal Eye</option>
+            <option value="1">Grade 1: Mild NPDR</option>
+            <option value="2">Grade 2: Moderate NPDR</option>
+            <option value="3">Grade 3: Severe NPDR</option>
+            <option value="4">Grade 4: Proliferative DR</option>
+          </select>
 
           {/* Filter Dropdown */}
           <select
             value={filterUrgency}
             onChange={(e) => setFilterUrgency(e.target.value)}
-            className="px-3 py-2.5 bg-[#081222] border border-[rgba(70,170,255,0.25)] rounded-xl text-xs text-slate-300 focus:outline-none focus:border-[#35b6ff] transition-all"
+            className="px-3 py-2 bg-[#081222] border border-[rgba(70,170,255,0.25)] rounded-xl text-xs text-slate-300 focus:outline-none focus:border-[#35b6ff] transition-all"
           >
             <option value="ALL">All Triage Levels</option>
             <option value="ROUTINE">Routine Screening</option>

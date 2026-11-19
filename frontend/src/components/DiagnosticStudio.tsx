@@ -467,9 +467,10 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
               <button
                 type="button"
                 onClick={onOpenReview}
-                className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-sky-500/20 border border-sky-400/40 text-xs font-bold text-white transition-all shadow-sm"
+                className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-sky-600/30 to-cyan-600/30 hover:from-sky-500/40 hover:to-cyan-500/40 border border-sky-400/60 text-xs font-bold text-sky-200 hover:text-white transition-all shadow-[0_0_16px_rgba(56,189,248,0.25)] hover:shadow-[0_0_24px_rgba(56,189,248,0.45)]"
+                title="Open Clinician Review & Sign-Off Modal"
               >
-                <Stethoscope className="w-4 h-4 text-sky-400" />
+                <Stethoscope className="w-4 h-4 text-sky-300" />
                 <span>{doctor ? 'Update Doctor Review' : 'Clinician Review & Sign-Off'}</span>
               </button>
 

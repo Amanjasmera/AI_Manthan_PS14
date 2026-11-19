@@ -106,15 +106,18 @@ def test_doctor_review_verification_workflow(db_session):
     import uuid
     test_id = str(uuid.uuid4())
     patient = Patient(
-        id=test_id,
+        name="Workflow Test Patient",
         full_name="Workflow Test Patient",
         age=58,
         gender="Female",
         diabetes_history="Type 2 Diabetes"
     )
+    db_session.add(patient)
+    db_session.flush()
+
     screening = Screening(
-        id=test_id,
-        patient_id=test_id,
+        record_id=test_id,
+        patient_id=patient.id,
         eye_side="RIGHT",
         raw_image_path="test_path.jpg",
         iqa_passed=True,
@@ -123,7 +126,6 @@ def test_doctor_review_verification_workflow(db_session):
         confidence=0.88,
         status="Pending / Review Required"
     )
-    db_session.add(patient)
     db_session.add(screening)
     db_session.commit()
 
@@ -149,7 +151,9 @@ def test_doctor_review_verification_workflow(db_session):
     db_session.commit()
 
     # Re-query screening from DB
-    updated = db_session.query(Screening).filter(Screening.id == test_id).first()
+    updated = db_session.query(Screening).filter(
+        (Screening.record_id == test_id) | (Screening.id == test_id)
+    ).first()
     assert updated.status == "Doctor Verified"
     assert updated.doctor_notes == "Verified moderate NPDR with microaneurysms and hard exudates. Routine follow-up."
     assert updated.doctor_review is not None

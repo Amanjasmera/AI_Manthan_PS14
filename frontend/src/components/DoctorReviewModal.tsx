@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { ScreeningDetail } from '../types';
 import { Language, translations } from '../utils/language';
-import { submitDoctorReview } from '../services/api';
+import { submitDoctorReview, signOffScreening } from '../services/api';
 import { SeverityBadge } from './SeverityBadge';
 
 interface DoctorReviewModalProps {
@@ -66,7 +66,12 @@ export const DoctorReviewModal: React.FC<DoctorReviewModalProps> = ({
     setError(null);
 
     try {
-      await submitDoctorReview(screening.id, {
+      const recId = (screening as any).record_id || screening.id;
+      // 1. Persist clinician sign-off via PATCH /api/screenings/{record_id}/sign-off
+      await signOffScreening(recId, clinicalNotes);
+
+      // 2. Submit clinician grading and recommendations
+      await submitDoctorReview(recId, {
         doctor_name: doctorName,
         doctor_license: doctorLicense,
         confirmed_grade: selectedGrade,
@@ -76,7 +81,7 @@ export const DoctorReviewModal: React.FC<DoctorReviewModalProps> = ({
       });
 
       // Fetch the updated screening record from backend
-      const res = await fetch(`/api/v1/screenings/${screening.id}`);
+      const res = await fetch(`/api/v1/screenings/${recId}`);
       const updated = await res.json();
       onSuccess(updated);
       onClose();

@@ -1,15 +1,18 @@
 import cv2
 import numpy as np
+from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Query, status
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
+from sqlalchemy import cast, String as SqlString, or_
 
 from app.database import get_db
 from app.config import UPLOAD_DIR, REPORT_DIR
-from app.models import Screening, Patient, ScreeningDetailResponse, IqaResult
+from app.models import Screening, Patient, DoctorReview, ScreeningDetailResponse, IqaResult
+from app.schemas import ScreeningSignOffRequest
 from app.services.screening_service import ScreeningService
 from app.core.iqa import ImageQualityAssessor
 from app.core.report_generator import PDFReportGenerator
@@ -30,8 +33,9 @@ async def analyze_retinal_image(
     patient_name: str = Form("Anonymous Patient"),
     age: int = Form(55, ge=0, le=125),
     gender: str = Form("Female"),
-    eye_side: str = Form("RIGHT", pattern="^(RIGHT|LEFT)$"),
+    eye_side: str = Form("RIGHT", pattern="^(RIGHT|LEFT|Right Eye \\(OD\\)|Left Eye \\(OS\\))$"),
     diabetes_history: str = Form("Type 2 Diabetes"),
+    symptoms: Optional[str] = Form(None),
     db: Session = Depends(get_db)
 ):
     """
@@ -66,7 +70,8 @@ async def analyze_retinal_image(
             age=age,
             gender=gender,
             eye_side=eye_side,
-            diabetes_history=diabetes_history
+            diabetes_history=diabetes_history,
+            symptoms=symptoms
         )
         return result
     except ValueError as ve:
@@ -114,13 +119,38 @@ async def check_image_quality(file: UploadFile = File(...)):
 def list_screenings(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
+    name: Optional[str] = Query(None, description="Search by patient name"),
+    icdr_grade: Optional[int] = Query(None, ge=0, le=4, description="Filter by ICDR grade (0 to 4)"),
     urgency: Optional[str] = Query(None, description="Filter by ROUTINE, NON_URGENT, URGENT, CRITICAL, RETAKE"),
     db: Session = Depends(get_db)
 ):
-    """Returns paginated longitudinal patient screening records."""
+    """
+    Returns paginated longitudinal patient screening records sorted newest first,
+    with optional filtering by patient name and ICDR grade.
+    """
     query = db.query(Screening).join(Patient)
-    if urgency:
-        query = query.filter(Screening.referral_urgency == urgency)
+
+    # Clean FastAPI Query defaults if called directly as a Python function in tests
+    clean_name = None if isinstance(name, type(Query(None))) else name
+    clean_grade = None if isinstance(icdr_grade, type(Query(None))) else icdr_grade
+    clean_urgency = None if isinstance(urgency, type(Query(None))) else urgency
+
+    if clean_name:
+        query = query.filter(
+            or_(
+                Patient.name.ilike(f"%{clean_name}%"),
+                Patient.full_name.ilike(f"%{clean_name}%")
+            )
+        )
+    if clean_grade is not None:
+        query = query.filter(
+            or_(
+                Screening.icdr_grade == clean_grade,
+                Screening.predicted_grade == clean_grade
+            )
+        )
+    if clean_urgency:
+        query = query.filter(Screening.referral_urgency == clean_urgency)
 
     total = query.count()
     screenings = query.order_by(Screening.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
@@ -131,26 +161,53 @@ def list_screenings(
         pred = s.prediction
         doctor = s.doctor_review
         
-        grade_val = pred.predicted_grade if pred else (s.predicted_grade if s.predicted_grade is not None else 0)
-        grade_str = pred.grade_name if pred else (s.grade_name or ("Retake Required" if not s.iqa_passed else "N/A"))
-        conf_val = pred.confidence if pred else (s.confidence or 0.0)
+        grade_val = s.icdr_grade if s.icdr_grade is not None else (pred.predicted_grade if pred else (s.predicted_grade if s.predicted_grade is not None else 0))
+        grade_str = s.stage_label or (pred.grade_name if pred else (s.grade_name or ("Retake Required" if not s.iqa_passed else "No DR")))
+        conf_val = s.model_confidence if s.model_confidence is not None else (pred.confidence if pred else (s.confidence or 0.0))
+        record_uuid = s.record_id or str(s.id)
+
+        pat_dict = {
+            "id": p.id if p else None,
+            "name": (p.name or p.full_name) if p else "Anonymous",
+            "full_name": (p.full_name or p.name) if p else "Anonymous",
+            "age": p.age if p else None,
+            "gender": p.gender if p else None,
+            "diabetes_history": p.diabetes_history if p else "Type 2 Diabetes",
+            "symptoms": p.symptoms if p else None,
+            "created_at": p.created_at.isoformat() if p and p.created_at else None
+        } if p else None
 
         items.append({
-            "id": s.id,
-            "patient_name": p.full_name,
-            "age": p.age,
-            "gender": p.gender,
+            "id": record_uuid,
+            "record_id": record_uuid,
+            "patient_id": p.id if p else None,
+            "patient": pat_dict,
+            "patient_name": (p.full_name or p.name) if p else "Anonymous Patient",
+            "age": p.age if p else None,
+            "gender": p.gender if p else None,
             "eye_side": s.eye_side,
             "iqa_passed": s.iqa_passed,
+            "icdr_grade": grade_val,
             "predicted_grade": grade_val,
+            "stage_label": grade_str,
             "grade_name": grade_str,
+            "model_confidence": conf_val,
             "confidence": conf_val,
+            "entropy": s.entropy if s.entropy is not None else 0.0,
+            "epistemic_uncertainty": s.epistemic_uncertainty if s.epistemic_uncertainty is not None else 0.0,
+            "aleatoric_uncertainty": s.aleatoric_uncertainty if s.aleatoric_uncertainty is not None else 0.0,
+            "hard_exudates": s.hard_exudates if s.hard_exudates is not None else 0,
+            "soft_exudates": s.soft_exudates if s.soft_exudates is not None else 0,
+            "approval_status": s.approval_status or ("CLINICIAN_SIGNED_OFF" if s.status == "Doctor Verified" else "AUTO_APPROVED"),
+            "clinician_notes": s.clinician_notes or s.doctor_notes,
+            "raw_image_url": s.raw_image_url or (f"/api/v1/files/{Path(s.raw_image_path).name}" if s.raw_image_path else None),
+            "heatmap_image_url": s.heatmap_image_url,
             "uncertainty_score": round(s.uncertainty_score, 4) if hasattr(s, "uncertainty_score") and s.uncertainty_score is not None else (round(pred.entropy, 4) if pred else 0.0),
             "requires_manual_doctor_review": bool(s.requires_manual_doctor_review) if hasattr(s, "requires_manual_doctor_review") else False,
             "referral_urgency": s.referral_urgency,
             "status": s.status,
             "confirmed_grade": doctor.confirmed_grade if doctor else None,
-            "created_at": s.created_at.isoformat(),
+            "created_at": s.created_at.isoformat() if s.created_at else None,
             "billing_status": s.billing_status or ("₹0 Charged — Waived by IQA Gatekeeper" if not s.iqa_passed else "₹25 Valid Scan"),
             "systemic_risk": s.systemic_risk or "Low Systemic Risk",
             "next_screening_interval": s.next_screening_interval or "12 Months"
@@ -161,6 +218,91 @@ def list_screenings(
         "page": page,
         "limit": limit,
         "items": items
+    }
+
+
+@router.patch("/{record_id}/sign-off", summary="Clinician Review & Sign-Off")
+def sign_off_screening(
+    record_id: str,
+    sign_off: ScreeningSignOffRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Accepts clinician_notes, updates approval_status to 'CLINICIAN_SIGNED_OFF',
+    records sign-off timestamp and doctor notes, and returns updated screening record.
+    """
+    screening = db.query(Screening).filter(
+        or_(
+            Screening.record_id == str(record_id),
+            cast(Screening.id, SqlString) == str(record_id)
+        )
+    ).first()
+    if not screening:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Screening record {record_id} not found.")
+
+    target_record_id = screening.record_id or str(screening.id)
+    screening.approval_status = "CLINICIAN_SIGNED_OFF"
+    screening.status = "Doctor Verified"
+    screening.clinician_notes = sign_off.clinician_notes
+    screening.doctor_notes = sign_off.clinician_notes
+    screening.requires_manual_doctor_review = False
+
+    # Sync with doctor_review table
+    review = db.query(DoctorReview).filter(DoctorReview.screening_id == target_record_id).first()
+    effective_grade = screening.icdr_grade if screening.icdr_grade is not None else (screening.predicted_grade if screening.predicted_grade is not None else 0)
+    now_utc = datetime.utcnow()
+
+    if not review:
+        review = DoctorReview(
+            screening_id=target_record_id,
+            doctor_name="Ophthalmologist On-Duty",
+            doctor_license="MCI-REG-CLINICAL",
+            confirmed_grade=effective_grade,
+            was_overridden=False,
+            referral_recommendation="Specialist review confirmed.",
+            clinical_notes=sign_off.clinician_notes,
+            reviewed_at=now_utc
+        )
+        db.add(review)
+    else:
+        review.clinical_notes = sign_off.clinician_notes
+        review.reviewed_at = now_utc
+
+    db.commit()
+    db.refresh(screening)
+
+    screening_dict = service.get_screening_dict(db, target_record_id)
+
+    return {
+        "status": "success",
+        "record_id": target_record_id,
+        "approval_status": screening.approval_status,
+        "clinician_notes": screening.clinician_notes,
+        "updated_at": now_utc.isoformat(),
+        "screening": screening_dict
+    }
+
+
+@router.delete("/{record_id}", summary="Delete Screening Record")
+def delete_screening(record_id: str, db: Session = Depends(get_db)):
+    """Deletes a screening record and cascades deletion to associated records."""
+    screening = db.query(Screening).filter(
+        or_(
+            Screening.record_id == str(record_id),
+            cast(Screening.id, SqlString) == str(record_id)
+        )
+    ).first()
+    if not screening:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Screening record {record_id} not found.")
+
+    target_id = screening.record_id or str(screening.id)
+    db.delete(screening)
+    db.commit()
+
+    return {
+        "status": "success",
+        "record_id": target_id,
+        "message": f"Screening record {target_id} deleted successfully."
     }
 
 
@@ -236,8 +378,10 @@ def list_unverified_screenings(
     items = []
     for s in screenings:
         p = s.patient
+        rec_id = s.record_id or str(s.id)
         items.append({
-            "id": s.id,
+            "id": rec_id,
+            "record_id": rec_id,
             "patient_name": p.full_name if p else "Unknown",
             "age": p.age if p else None,
             "gender": p.gender if p else None,

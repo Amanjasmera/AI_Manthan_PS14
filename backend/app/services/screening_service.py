@@ -4,6 +4,7 @@ import numpy as np
 from pathlib import Path
 from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
+from sqlalchemy import cast, String as SqlString, or_
 
 from app.config import UPLOAD_DIR
 from app.models import Patient, Screening, Prediction, Lesion, AuditLog, DoctorReview, ActiveLearningLog
@@ -29,7 +30,8 @@ class ScreeningService:
         age: int,
         gender: str,
         eye_side: str = "RIGHT",
-        diabetes_history: str = "Type 2 Diabetes"
+        diabetes_history: str = "Type 2 Diabetes",
+        symptoms: Optional[str] = None
     ) -> Dict[str, Any]:
         screening_id = str(uuid.uuid4())
 
@@ -47,12 +49,14 @@ class ScreeningService:
         # 3. Image Quality Assessment (IQA Gate)
         iqa = ImageQualityAssessor.assess_image(img_bgr)
 
-        # 4. Create patient record
+        # 4. Create patient record in PostgreSQL
         patient = Patient(
+            name=patient_name,
             full_name=patient_name,
             age=age,
             gender=gender,
-            diabetes_history=diabetes_history
+            diabetes_history=diabetes_history,
+            symptoms=symptoms
         )
         db.add(patient)
         db.flush()
@@ -129,24 +133,42 @@ class ScreeningService:
         else:
             screening_status = "ANALYZED"
 
-        # Persist Screening Record
+        # Persist Screening Record to PostgreSQL
+        raw_url = f"/api/v1/files/{raw_filename}"
+        prep_url = f"/api/v1/files/{prep_filename}"
+        heatmap_url = f"/api/v1/files/{gradcam_filename}"
+        normalized_eye = "Right Eye (OD)" if eye_side in ("RIGHT", "Right Eye (OD)") else "Left Eye (OS)"
+        approval_status = "MANUAL_REVIEW_REQUIRED" if requires_manual_doctor_review else "AUTO_APPROVED"
+
         screening = Screening(
-            id=screening_id,
+            record_id=screening_id,
             patient_id=patient.id,
-            eye_side=eye_side,
+            eye_side=normalized_eye,
+            icdr_grade=grade,
+            stage_label=prediction_result["grade_name"],
+            model_confidence=float(prediction_result["confidence"]),
+            entropy=float(prediction_result.get("entropy", 0.0)),
+            epistemic_uncertainty=float(prediction_result.get("epistemic_uncertainty", 0.0)),
+            aleatoric_uncertainty=float(prediction_result.get("aleatoric_uncertainty", 0.0)),
+            hard_exudates=int(lesion_data.get("hard_exudate_count", 0)),
+            soft_exudates=int(lesion_data.get("soft_exudate_count", 0)),
+            approval_status=approval_status,
+            clinician_notes=None,
+            raw_image_url=raw_url,
+            heatmap_image_url=heatmap_url,
             raw_image_path=str(raw_path),
             preprocessed_image_path=str(prep_path),
             iqa_passed=True,
             iqa_error_codes=[],
-            blur_score=iqa["blur_score"],
-            illumination_score=iqa["illumination_score"],
-            contrast_score=iqa["contrast_score"],
-            fov_score=iqa.get("fov_score", 0.0),
-            iqa_feedback=iqa["feedback"],
-            recapture_instructions=iqa["recapture_instructions"],
+            blur_score=float(iqa["blur_score"]),
+            illumination_score=float(iqa["illumination_score"]),
+            contrast_score=float(iqa["contrast_score"]),
+            fov_score=float(iqa.get("fov_score", 0.0)),
+            iqa_feedback=iqa.get("feedback", ""),
+            recapture_instructions=iqa.get("recapture_instructions", ""),
             predicted_grade=grade,
             grade_name=prediction_result["grade_name"],
-            confidence=prediction_result["confidence"],
+            confidence=float(prediction_result["confidence"]),
             uncertainty_score=uncertainty_score,
             requires_manual_doctor_review=requires_manual_doctor_review,
             referral_urgency=referral_urgency,
@@ -232,7 +254,12 @@ class ScreeningService:
 
     @staticmethod
     def get_screening_dict(db: Session, screening_id: str) -> Optional[Dict[str, Any]]:
-        screening = db.query(Screening).filter(Screening.id == screening_id).first()
+        screening = db.query(Screening).filter(
+            or_(
+                Screening.record_id == str(screening_id),
+                cast(Screening.id, SqlString) == str(screening_id)
+            )
+        ).first()
         if not screening:
             return None
 
@@ -249,7 +276,7 @@ class ScreeningService:
                 recapture_instructions=screening.recapture_instructions or ""
             )
         else:
-            current_grade = doctor.confirmed_grade if doctor else (screening.predicted_grade if screening.predicted_grade is not None else 0)
+            current_grade = doctor.confirmed_grade if doctor else (screening.predicted_grade if screening.predicted_grade is not None else (screening.icdr_grade or 0))
             triage = get_triage_info(current_grade)
 
         billing_status = screening.billing_status or ("₹0 Charged — Waived by IQA Gatekeeper" if not screening.iqa_passed else "₹25 Valid Scan")
@@ -258,19 +285,36 @@ class ScreeningService:
         systemic_risk = screening.systemic_risk or triage["systemic_risk"]
         next_screening_interval = screening.next_screening_interval or triage["next_interval"]
 
+        record_uuid = screening.record_id or str(screening.id)
+
         return {
-            "id": screening.id,
+            "id": record_uuid,
+            "record_id": record_uuid,
+            "patient_id": p.id if p else None,
             "patient": {
                 "id": p.id,
-                "full_name": p.full_name,
+                "name": p.name or p.full_name,
+                "full_name": p.full_name or p.name,
                 "age": p.age,
                 "gender": p.gender,
                 "diabetes_history": p.diabetes_history,
-                "created_at": p.created_at.isoformat()
-            },
+                "symptoms": p.symptoms,
+                "created_at": p.created_at.isoformat() if p.created_at else None
+            } if p else None,
             "eye_side": screening.eye_side,
-            "raw_image_url": f"/api/v1/files/{Path(screening.raw_image_path).name}",
+            "icdr_grade": screening.icdr_grade if screening.icdr_grade is not None else (pred.predicted_grade if pred else 0),
+            "stage_label": screening.stage_label or (pred.grade_name if pred else "No DR"),
+            "model_confidence": screening.model_confidence if screening.model_confidence is not None else (pred.confidence if pred else 0.0),
+            "entropy": screening.entropy if screening.entropy is not None else (pred.entropy if pred else 0.0),
+            "epistemic_uncertainty": screening.epistemic_uncertainty if screening.epistemic_uncertainty is not None else 0.0,
+            "aleatoric_uncertainty": screening.aleatoric_uncertainty if screening.aleatoric_uncertainty is not None else 0.0,
+            "hard_exudates": screening.hard_exudates if screening.hard_exudates is not None else (lesions.hard_exudate_count if lesions else 0),
+            "soft_exudates": screening.soft_exudates if screening.soft_exudates is not None else (lesions.soft_exudate_count if lesions else 0),
+            "approval_status": screening.approval_status or ("CLINICIAN_SIGNED_OFF" if doctor else "AUTO_APPROVED"),
+            "clinician_notes": screening.clinician_notes or (doctor.clinical_notes if doctor else None),
+            "raw_image_url": screening.raw_image_url or (f"/api/v1/files/{Path(screening.raw_image_path).name}" if screening.raw_image_path else None),
             "preprocessed_image_url": f"/api/v1/files/{Path(screening.preprocessed_image_path).name}" if screening.preprocessed_image_path else None,
+            "heatmap_image_url": screening.heatmap_image_url or (f"/api/v1/files/{Path(pred.gradcam_path).name}" if pred and pred.gradcam_path else None),
             "iqa": {
                 "passed": screening.iqa_passed,
                 "error_codes": screening.iqa_error_codes or [],
@@ -324,7 +368,7 @@ class ScreeningService:
             "uncertainty_score": round(screening.uncertainty_score, 4) if hasattr(screening, "uncertainty_score") and screening.uncertainty_score is not None else 0.0,
             "requires_manual_doctor_review": bool(screening.requires_manual_doctor_review) if hasattr(screening, "requires_manual_doctor_review") else False,
             "created_at": screening.created_at.isoformat(),
-            "report_pdf_url": f"/api/v1/screenings/{screening.id}/report.pdf",
+            "report_pdf_url": f"/api/v1/screenings/{record_uuid}/report.pdf",
             "billing_status": billing_status,
             "billing_amount": billing_amount,
             "commercial_tier": commercial_tier,
