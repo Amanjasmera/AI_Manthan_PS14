@@ -246,11 +246,10 @@ export const PatientIntake: React.FC<PatientIntakeProps> = ({
                 <button
                   type="button"
                   onClick={() => setEyeSide('RIGHT')}
-                  className={`py-3 px-4 min-h-[48px] rounded-xl border text-xs sm:text-sm font-bold transition-all flex items-center justify-center space-x-2.5 ${
-                    eyeSide === 'RIGHT'
+                  className={`py-3 px-4 min-h-[48px] rounded-xl border text-xs sm:text-sm font-bold transition-all flex items-center justify-center space-x-2.5 ${eyeSide === 'RIGHT'
                       ? 'bg-sky-500/25 border-sky-400 text-sky-200 shadow-[0_0_18px_rgba(56,189,248,0.35)] ring-2 ring-sky-400'
                       : 'bg-slate-900/70 border-slate-700/60 text-slate-400 hover:text-white hover:border-slate-600'
-                  }`}
+                    }`}
                 >
                   <span className="w-3 h-3 rounded-full bg-sky-400 shadow-[0_0_8px_#38bdf8]" />
                   <span>{lang === 'hi' ? 'दाईं आँख (Right Eye - OD)' : 'Right Eye (दाईं आँख)'}</span>
@@ -259,11 +258,10 @@ export const PatientIntake: React.FC<PatientIntakeProps> = ({
                 <button
                   type="button"
                   onClick={() => setEyeSide('LEFT')}
-                  className={`py-3 px-4 min-h-[48px] rounded-xl border text-xs sm:text-sm font-bold transition-all flex items-center justify-center space-x-2.5 ${
-                    eyeSide === 'LEFT'
+                  className={`py-3 px-4 min-h-[48px] rounded-xl border text-xs sm:text-sm font-bold transition-all flex items-center justify-center space-x-2.5 ${eyeSide === 'LEFT'
                       ? 'bg-sky-500/25 border-sky-400 text-sky-200 shadow-[0_0_18px_rgba(56,189,248,0.35)] ring-2 ring-sky-400'
                       : 'bg-slate-900/70 border-slate-700/60 text-slate-400 hover:text-white hover:border-slate-600'
-                  }`}
+                    }`}
                 >
                   <span className="w-3 h-3 rounded-full bg-sky-400 shadow-[0_0_8px_#38bdf8]" />
                   <span>{lang === 'hi' ? 'बाईं आँख (Left Eye - OS)' : 'Left Eye (बाईं आँख)'}</span>
@@ -298,17 +296,15 @@ export const PatientIntake: React.FC<PatientIntakeProps> = ({
                     key={opt.id}
                     type="button"
                     onClick={() => toggleHistoryItem(lang === 'hi' ? opt.labelHi : opt.labelEn)}
-                    className={`p-3 rounded-xl border text-left text-xs font-semibold transition-all flex items-center justify-between ${
-                      isChecked
+                    className={`p-3 rounded-xl border text-left text-xs font-semibold transition-all flex items-center justify-between ${isChecked
                         ? 'bg-amber-950/35 border-amber-400 text-amber-200 ring-1 ring-amber-400/60 shadow-[0_0_12px_rgba(245,158,11,0.2)]'
                         : 'bg-slate-900/70 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
-                    }`}
+                      }`}
                   >
                     <span>{lang === 'hi' ? opt.labelHi : opt.labelEn}</span>
                     <span
-                      className={`w-4 h-4 rounded flex items-center justify-center border text-[10px] ${
-                        isChecked ? 'bg-amber-500 border-amber-400 text-slate-950 font-black' : 'border-slate-700'
-                      }`}
+                      className={`w-4 h-4 rounded flex items-center justify-center border text-[10px] ${isChecked ? 'bg-amber-500 border-amber-400 text-slate-950 font-black' : 'border-slate-700'
+                        }`}
                     >
                       {isChecked ? '✓' : ''}
                     </span>
@@ -358,17 +354,15 @@ export const PatientIntake: React.FC<PatientIntakeProps> = ({
                     key={opt.id}
                     type="button"
                     onClick={() => toggleSymptomItem(lang === 'hi' ? opt.labelHi : opt.labelEn)}
-                    className={`p-3 rounded-xl border text-left text-xs font-semibold transition-all flex items-center justify-between ${
-                      isChecked
+                    className={`p-3 rounded-xl border text-left text-xs font-semibold transition-all flex items-center justify-between ${isChecked
                         ? 'bg-emerald-950/35 border-emerald-400 text-emerald-200 ring-1 ring-emerald-400/60 shadow-[0_0_12px_rgba(16,185,129,0.2)]'
                         : 'bg-slate-900/70 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
-                    }`}
+                      }`}
                   >
                     <span>{lang === 'hi' ? opt.labelHi : opt.labelEn}</span>
                     <span
-                      className={`w-4 h-4 rounded flex items-center justify-center border text-[10px] ${
-                        isChecked ? 'bg-emerald-500 border-emerald-400 text-slate-950 font-black' : 'border-slate-700'
-                      }`}
+                      className={`w-4 h-4 rounded flex items-center justify-center border text-[10px] ${isChecked ? 'bg-emerald-500 border-emerald-400 text-slate-950 font-black' : 'border-slate-700'
+                        }`}
                     >
                       {isChecked ? '✓' : ''}
                     </span>

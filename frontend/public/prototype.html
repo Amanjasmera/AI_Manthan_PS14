@@ -230,6 +230,7 @@ header {
 
 nav {
   display: flex;
+  align-items: center;
   gap: 4px;
   padding: 5px;
   border: 1px solid var(--ln);
@@ -237,6 +238,7 @@ nav {
   background: var(--gl);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
+  white-space: nowrap;
 }
 
 nav a {
@@ -247,6 +249,7 @@ nav a {
   border-radius: 99px;
   transition: .25s;
   touch-action: manipulation;
+  white-space: nowrap;
 }
 
 nav a:hover, nav a.on {
@@ -1398,8 +1401,8 @@ footer button:hover {
 <div class="hbg" id="hbg"></div><canvas id="gl"></canvas><div class="vig"></div>
 <svg id="ecg" viewBox="0 0 1400 60" preserveAspectRatio="none"><path d="M0 30H300l12-4 12 4h40l10-6 8 6h30l8 4 14-28 14 50 12-26h40l12-6 12 6H760l12-4 12 4h60l10-6 8 6h50l14-28 14 50 12-26H1400"/></svg>
 <header><div class="logo" onclick="location.href='/prototype'" style="cursor:pointer">NETRA<b>X</b><small>Explore. Learn. See Better.</small></div>
-<nav id="nav"><a href="/prototype#p1" style="background:var(--cy);color:#04070d;font-weight:700">Home</a><a href="/?tab=intake">Patient Intake</a><a href="/?tab=studio">Eye Scan</a><a href="/?tab=demo">Demo Mode</a><a href="/?tab=review">Doctor Review</a><a href="/?tab=history">Past Records</a><a href="/prototype#p2">3D Eye Tour ↗</a><a href="/?tab=intake" class="app-cta" style="color:#04070d;background:var(--cy);font-weight:700;margin-left:6px;box-shadow:0 0 16px rgba(53,182,255,.5);transition:all .25s">Launch App &rarr;</a></nav>
-<div class="live" style="display:flex;align-items:center;gap:10px"><a href="/?tab=intake" class="m-app-cta" style="display:none;color:#04070d;background:var(--cy);font-size:11px;font-weight:700;padding:5px 12px;border-radius:99px;text-decoration:none;box-shadow:0 0 12px rgba(53,182,255,.4)">Launch App &rarr;</a><span style="display:inline-flex;align-items:center;gap:6px"><i></i>Live screenings today <b id="ct">1,284</b></span></div></header>
+<nav id="nav"><a href="/prototype#p1" style="background:var(--cy);color:#04070d;font-weight:700">Home</a><a href="/?tab=intake">Patient Intake</a><a href="/?tab=studio">Eye Scan</a><a href="/?tab=demo">Demo Mode</a><a href="/?tab=review">Doctor Review</a><a href="/?tab=history">Past Records</a></nav>
+<div class="live" style="display:flex;align-items:center;gap:10px"><span style="display:inline-flex;align-items:center;gap:6px"><i></i>Live screenings today <b id="ct">1,284</b></span></div></header>
 <div class="dots" id="dots"><a href="#p1" data-t="1 Problem" aria-label="Problem"></a><a href="#p2" data-t="2 The eye" aria-label="The eye"></a><a href="#p3" data-t="3 The AI" aria-label="The AI"></a><a href="#p4" data-t="4 Precautions" aria-label="Precautions"></a></div>
 <div id="log" aria-hidden="true"></div>
 <div id="xs"><div id="xw"></div></div>
