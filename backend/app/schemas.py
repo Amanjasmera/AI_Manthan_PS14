@@ -41,6 +41,13 @@ class ScreeningBase(BaseModel):
     clinician_notes: Optional[str] = Field(None, description="Doctor observations and clinical notes")
     raw_image_url: Optional[str] = Field(None, description="URL path to raw retinal fundus image")
     heatmap_image_url: Optional[str] = Field(None, description="URL path to Grad-CAM saliency overlay")
+    patient_phone: Optional[str] = Field(None, description="Patient contact telephone number")
+    patient_email: Optional[str] = Field(None, description="Patient contact email address")
+    review_requested: Optional[bool] = Field(False, description="Flag indicating patient requested doctor review")
+    review_status: Optional[str] = Field("NOT_REQUESTED", description="Status: NOT_REQUESTED, PENDING_REVIEW, REVIEWED, URGENT_FOLLOWUP")
+    doctor_suggestion: Optional[str] = Field(None, description="Clinical recommendations, prescriptions, and advice")
+    doctor_contact_info: Optional[str] = Field(None, description="Doctor/Clinic contact details for patient followup")
+    reviewed_at: Optional[datetime] = Field(None, description="Timestamp when review was finalized")
 
 class ScreeningCreate(ScreeningBase):
     record_id: Optional[str] = None
@@ -48,6 +55,62 @@ class ScreeningCreate(ScreeningBase):
 
 class ScreeningSignOffRequest(BaseModel):
     clinician_notes: str = Field(..., min_length=2, description="Clinical sign-off notes & recommendations by doctor")
+
+# Doctor Portal Schemas
+class ReviewRequestPayload(BaseModel):
+    patient_phone: Optional[str] = Field(None, description="Patient or guardian contact phone number")
+    patient_email: Optional[str] = Field(None, description="Patient email address for receiving prescription/advice")
+    notes: Optional[str] = Field(None, description="Short note or question for the ophthalmologist")
+
+class DoctorReviewActionPayload(BaseModel):
+    doctor_suggestion: str = Field(..., min_length=2, description="Clinical advice, instructions, and next steps")
+    review_status: str = Field(..., description="Target status: REVIEWED or URGENT_FOLLOWUP")
+    doctor_contact_info: Optional[str] = Field(None, description="Direct clinic contact number or email for patient")
+    confirmed_grade: Optional[int] = Field(None, ge=0, le=4, description="Optional confirmed or overridden ICDR grade")
+
+class DoctorStatsResponse(BaseModel):
+    pending_reviews: int = Field(0, description="Count of cases awaiting doctor review")
+    high_risk_cases: int = Field(0, description="Count of Grade 3 & Grade 4 cases")
+    completed_reviews: int = Field(0, description="Count of clinician-reviewed cases")
+    total_screenings: int = Field(0, description="Total patient screenings conducted")
+
+class DoctorQueuePatient(BaseModel):
+    id: Optional[int] = None
+    name: str
+    age: Optional[int] = None
+    gender: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    diabetes_history: Optional[str] = None
+    symptoms: Optional[str] = None
+
+class DoctorQueueItem(BaseModel):
+    id: str
+    record_id: str
+    patient: DoctorQueuePatient
+    patient_name: str
+    age: Optional[int] = None
+    gender: Optional[str] = None
+    eye_side: str
+    icdr_grade: int
+    stage_label: str
+    model_confidence: float
+    entropy: float
+    epistemic_uncertainty: float
+    aleatoric_uncertainty: float
+    hard_exudates: int
+    soft_exudates: int
+    raw_image_url: Optional[str] = None
+    heatmap_image_url: Optional[str] = None
+    review_requested: bool = False
+    review_status: str = "NOT_REQUESTED"
+    doctor_suggestion: Optional[str] = None
+    doctor_contact_info: Optional[str] = None
+    reviewed_at: Optional[str] = None
+    reviewed_by_doctor_name: Optional[str] = None
+    created_at: Optional[str] = None
+    referral_urgency: Optional[str] = "ROUTINE"
+    status: Optional[str] = "ANALYZED"
 
 class ScreeningResponse(ScreeningBase):
     id: int

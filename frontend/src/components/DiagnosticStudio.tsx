@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { 
   Download, Stethoscope, AlertTriangle, ShieldCheck, Microscope, 
-  Info, Clock, Sparkles, HeartHandshake, Eye, FileText, CheckCircle2, ChevronRight 
+  Info, Clock, Sparkles, HeartHandshake, Eye, FileText, CheckCircle2, ChevronRight, Phone, UserCheck, Send 
 } from 'lucide-react';
+import { RequestReviewModal } from './RequestReviewModal';
 import { ScreeningDetail } from '../types';
 import { Language, translations } from '../utils/language';
 import { SeverityBadge, UrgencyBadge } from './SeverityBadge';
@@ -16,6 +17,7 @@ interface DiagnosticStudioProps {
   userRole?: string;
   onOpenReview: () => void;
   onOpenReport: () => void;
+  onUpdateScreening?: (updated: ScreeningDetail) => void;
 }
 
 export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
@@ -24,8 +26,22 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
   userRole,
   onOpenReview,
   onOpenReport,
+  onUpdateScreening,
 }) => {
   const t = translations[lang];
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [screeningData, setScreeningData] = useState<ScreeningDetail>(screening);
+
+  React.useEffect(() => {
+    setScreeningData(screening);
+  }, [screening]);
+
+  const handleReviewSubmitted = (updated: any) => {
+    setScreeningData(updated);
+    if (onUpdateScreening) {
+      onUpdateScreening(updated);
+    }
+  };
   const role = (userRole || getUserRole() || 'user').toLowerCase();
   const isDoctor = role === 'doctor';
 
@@ -396,6 +412,63 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
                 </div>
               </div>
 
+              {/* Doctor Review Card if reviewed or urgent followup */}
+              {(screeningData.doctor_suggestion || screeningData.review_status === 'REVIEWED' || screeningData.review_status === 'URGENT_FOLLOWUP') && (
+                <div className="p-4 sm:p-5 rounded-2xl bg-teal-950/40 border border-teal-500/30 text-white space-y-3 shadow-lg shadow-teal-500/5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <Stethoscope className="w-5 h-5 text-teal-400" />
+                      <span className="font-bold text-sm text-teal-300">
+                        {lang === 'hi' ? 'नेत्र विशेषज्ञ की समीक्षा एवं सलाह' : "Doctor's Review & Clinical Suggestion"}
+                      </span>
+                    </div>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                      screeningData.review_status === 'URGENT_FOLLOWUP'
+                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                        : 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
+                    }`}>
+                      {screeningData.review_status === 'URGENT_FOLLOWUP' ? 'Urgent Followup' : 'Doctor Verified'}
+                    </span>
+                  </div>
+
+                  {screeningData.reviewed_by_doctor_name && (
+                    <p className="text-xs text-slate-300 font-medium">
+                      Evaluated by: <span className="text-white font-semibold">{screeningData.reviewed_by_doctor_name}</span>
+                    </p>
+                  )}
+
+                  <div className="p-3 rounded-xl bg-slate-900/80 border border-white/5 text-xs text-slate-200 leading-relaxed font-sans">
+                    {screeningData.doctor_suggestion}
+                  </div>
+
+                  {screeningData.doctor_contact_info && (
+                    <div className="flex items-center justify-between text-xs pt-2 border-t border-white/5">
+                      <span className="text-slate-400">Clinic / Helpline:</span>
+                      <a
+                        href={`tel:${screeningData.doctor_contact_info.replace(/[^0-9+]/g, '')}`}
+                        className="font-semibold text-teal-300 hover:text-teal-200 flex items-center space-x-1"
+                      >
+                        <Phone className="w-3.5 h-3.5" />
+                        <span>{screeningData.doctor_contact_info}</span>
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Pending Review Banner if requested but not yet reviewed */}
+              {screeningData.review_status === 'PENDING_REVIEW' && (
+                <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Clock className="w-4 h-4 text-amber-400 animate-pulse shrink-0" />
+                    <span>Case submitted to ophthalmologist queue. Review pending.</span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-[10px] font-bold text-amber-300">
+                    In Queue
+                  </span>
+                </div>
+              )}
+
               {/* Bold Easy-to-Read "Next Step" Box */}
               <div className="p-4 sm:p-5 rounded-2xl bg-slate-950 border border-white/10 space-y-2">
                 <div className="flex items-center space-x-2 text-xs font-bold uppercase tracking-wider text-sky-400">
@@ -432,6 +505,26 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
 
             {/* Two Clean Action Buttons */}
             <div className="space-y-2.5 pt-2">
+              {/* Send to Doctor for Review Button */}
+              {!screeningData.doctor_suggestion && screeningData.review_status !== 'REVIEWED' && screeningData.review_status !== 'URGENT_FOLLOWUP' && (
+                <button
+                  type="button"
+                  onClick={() => setIsReviewModalOpen(true)}
+                  className={`w-full py-3 px-5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center space-x-2 active:scale-[0.99] ${
+                    screeningData.review_status === 'PENDING_REVIEW'
+                      ? 'bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:bg-amber-500/30'
+                      : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.3)]'
+                  }`}
+                >
+                  <UserCheck className="w-4 h-4" />
+                  <span>
+                    {screeningData.review_status === 'PENDING_REVIEW'
+                      ? (lang === 'hi' ? 'समीक्षा विवरण अपडेट करें' : 'Update Review Request')
+                      : (lang === 'hi' ? 'नेत्र डॉक्टर समीक्षा हेतु भेजें' : 'Send to Doctor for Review')}
+                  </span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => setViewMode('clinical')}
@@ -807,6 +900,13 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
         </div>
       )}
 
+      {/* Request Review Modal */}
+      <RequestReviewModal
+        screening={screeningData}
+        isOpen={isReviewModalOpen}
+        onClose={() => setIsReviewModalOpen(false)}
+        onSuccess={handleReviewSubmitted}
+      />
     </div>
   );
 };

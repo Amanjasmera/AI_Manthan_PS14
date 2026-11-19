@@ -14,6 +14,7 @@ from app.database import engine, Base, init_db
 from app.config import UPLOAD_DIR, REPORT_DIR
 from app.api.routes_screenings import router as screenings_router
 from app.api.routes_doctor import router as doctor_router
+from app.api.routes_doctor_portal import router as doctor_portal_router
 from app.api.routes_health import router as health_router
 from app.api.routes_auth import router as auth_router
 from app.routers.reviews import router as reviews_router
@@ -41,6 +42,8 @@ app.include_router(screenings_router, prefix="/api")
 app.include_router(screenings_router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api")
 app.include_router(auth_router, prefix="/api/v1")
+app.include_router(doctor_portal_router, prefix="/api")
+app.include_router(doctor_portal_router, prefix="/api/v1")
 app.include_router(doctor_router, prefix="/api/v1")
 app.include_router(health_router, prefix="/api/v1")
 app.include_router(reviews_router, prefix="/api/v1")

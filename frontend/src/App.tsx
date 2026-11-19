@@ -7,6 +7,7 @@ import { DiagnosticStudio } from './components/DiagnosticStudio';
 import { PatientHistoryTable } from './components/PatientHistoryTable';
 import { DoctorReviewModal } from './components/DoctorReviewModal';
 import { ReportModal } from './components/ReportModal';
+import { DoctorPortal } from './components/DoctorPortal';
 import { AuthModal } from './components/AuthModal';
 import { Language } from './utils/language';
 import { ScreeningDetail, ScreeningListItem, UserProfile } from './types';
@@ -72,7 +73,7 @@ export default function App() {
     loadInitialData();
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab') as NavigationTab | null;
-    if (tabParam && ['intake', 'studio', 'demo', 'review', 'history'].includes(tabParam)) {
+    if (tabParam && ['intake', 'studio', 'demo', 'review', 'history', 'doctor-portal'].includes(tabParam)) {
       setActiveTab(tabParam);
     }
   }, []);
@@ -266,6 +267,10 @@ export default function App() {
                     userRole={currentUser?.role}
                     onOpenReview={() => setIsReviewOpen(true)}
                     onOpenReport={() => setIsReportOpen(true)}
+                    onUpdateScreening={(updated) => {
+                      setActiveScreening(updated);
+                      listScreenings(1, 50).then((res) => setScreeningsList(res.items));
+                    }}
                   />
                 ) : (
                   /* STANDBY STATE: Clean Awaiting Scan Card */
@@ -354,6 +359,14 @@ export default function App() {
               onSelectScreening={handleSelectScreening}
             />
           </div>
+        )}
+
+        {/* VIEW 6: DEDICATED REAL-WORLD DOCTOR PORTAL (Clinician Workspace) */}
+        {activeTab === 'doctor-portal' && (
+          <DoctorPortal
+            onNavigateHome={() => handleTabChange('intake')}
+            onOpenLoginModal={() => setIsAuthOpen(true)}
+          />
         )}
 
       </main>

@@ -3,12 +3,13 @@ export type EyeSide = 'LEFT' | 'RIGHT';
 export type ReferralUrgency = 'ROUTINE' | 'NON_URGENT' | 'URGENT' | 'CRITICAL' | 'RETAKE';
 
 export interface Patient {
-  id: string;
+  id: string | number;
   full_name: string;
   age: number;
   gender: string;
   diabetes_history: string;
-  created_at: string;
+  created_at?: string;
+  symptoms?: string;
 }
 
 export interface IqaResult {
@@ -70,6 +71,7 @@ export interface ScreeningDetail {
   eye_side: EyeSide;
   raw_image_url: string;
   preprocessed_image_url?: string;
+  heatmap_image_url?: string;
   iqa: IqaResult;
   iqa_passed?: boolean;
   prediction?: Prediction;
@@ -81,6 +83,21 @@ export interface ScreeningDetail {
   requires_manual_doctor_review?: boolean;
   created_at: string;
   report_pdf_url?: string;
+  billing_status?: string;
+  systemic_risk?: string;
+  next_screening_interval?: string;
+  patient_phone?: string;
+  patient_email?: string;
+  review_requested?: boolean;
+  review_status?: string;
+  doctor_suggestion?: string;
+  doctor_contact_info?: string;
+  reviewed_at?: string;
+  reviewed_by_doctor_name?: string;
+  bilingual_explanation?: {
+    en: string;
+    hi: string;
+  };
 }
 
 export interface ScreeningListItem {
@@ -99,6 +116,14 @@ export interface ScreeningListItem {
   status: string;
   confirmed_grade?: number;
   created_at: string;
+  patient_phone?: string;
+  patient_email?: string;
+  review_requested?: boolean;
+  review_status?: string;
+  doctor_suggestion?: string;
+  doctor_contact_info?: string;
+  reviewed_at?: string;
+  reviewed_by_doctor_name?: string;
 }
 
 export interface SystemHealth {
@@ -125,7 +150,6 @@ export interface SystemHealth {
   datasets_supported: string[];
   compliance: string;
 }
-
 
 export type UserRole = 'User' | 'Doctor' | 'user' | 'doctor';
 
@@ -157,4 +181,65 @@ export interface AuthSession {
   role?: string;
   full_name?: string;
   user: UserProfile;
+}
+
+// Doctor Portal & Clinical Review Workflow Interfaces
+export interface ReviewRequestPayload {
+  patient_phone?: string;
+  patient_email?: string;
+  notes?: string;
+}
+
+export interface DoctorReviewActionPayload {
+  doctor_suggestion: string;
+  review_status: 'REVIEWED' | 'URGENT_FOLLOWUP' | string;
+  doctor_contact_info?: string;
+  confirmed_grade?: number;
+}
+
+export interface DoctorStats {
+  pending_reviews: number;
+  high_risk_cases: number;
+  completed_reviews: number;
+  total_screenings: number;
+}
+
+export interface DoctorQueuePatient {
+  id?: number | null;
+  name: string;
+  age?: number | null;
+  gender?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  diabetes_history?: string | null;
+  symptoms?: string | null;
+}
+
+export interface DoctorQueueItem {
+  id: string;
+  record_id: string;
+  patient: DoctorQueuePatient;
+  patient_name: string;
+  age?: number | null;
+  gender?: string | null;
+  eye_side: string;
+  icdr_grade: number;
+  stage_label: string;
+  model_confidence: number;
+  entropy: number;
+  epistemic_uncertainty: number;
+  aleatoric_uncertainty: number;
+  hard_exudates: number;
+  soft_exudates: number;
+  raw_image_url?: string;
+  heatmap_image_url?: string;
+  review_requested: boolean;
+  review_status: string; // 'NOT_REQUESTED' | 'PENDING_REVIEW' | 'REVIEWED' | 'URGENT_FOLLOWUP'
+  doctor_suggestion?: string | null;
+  doctor_contact_info?: string | null;
+  reviewed_at?: string | null;
+  reviewed_by_doctor_name?: string | null;
+  created_at?: string | null;
+  referral_urgency?: string;
+  status?: string;
 }

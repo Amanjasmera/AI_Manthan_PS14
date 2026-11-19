@@ -378,6 +378,14 @@ class ScreeningService:
             "next_screening_interval": next_screening_interval,
             "uploaded_by_id": screening.uploaded_by_id,
             "reviewed_by_doctor_id": screening.reviewed_by_doctor_id,
+            "reviewed_by_doctor_name": (screening.reviewed_by_doctor.full_name or screening.reviewed_by_doctor.username) if getattr(screening, "reviewed_by_doctor", None) else (doctor.doctor_name if doctor else None),
+            "patient_phone": getattr(screening, "patient_phone", None),
+            "patient_email": getattr(screening, "patient_email", None),
+            "review_requested": bool(getattr(screening, "review_requested", False)),
+            "review_status": getattr(screening, "review_status", "NOT_REQUESTED") or "NOT_REQUESTED",
+            "doctor_suggestion": getattr(screening, "doctor_suggestion", None) or (doctor.clinical_notes if doctor else None),
+            "doctor_contact_info": getattr(screening, "doctor_contact_info", None),
+            "reviewed_at": screening.reviewed_at.isoformat() if getattr(screening, "reviewed_at", None) else (doctor.reviewed_at.isoformat() if doctor and doctor.reviewed_at else None),
             "bilingual_explanation": {
                 "en": triage.get("patient_explanation_en", ""),
                 "hi": triage.get("patient_explanation_hi", "")

@@ -103,6 +103,20 @@ def init_db():
                     conn.execute(text("ALTER TABLE screenings ADD COLUMN uploaded_by_id INTEGER"))
                 if "reviewed_by_doctor_id" not in screenings_cols:
                     conn.execute(text("ALTER TABLE screenings ADD COLUMN reviewed_by_doctor_id INTEGER"))
+                if "patient_phone" not in screenings_cols:
+                    conn.execute(text("ALTER TABLE screenings ADD COLUMN patient_phone VARCHAR(30)"))
+                if "patient_email" not in screenings_cols:
+                    conn.execute(text("ALTER TABLE screenings ADD COLUMN patient_email VARCHAR(120)"))
+                if "review_requested" not in screenings_cols:
+                    conn.execute(text("ALTER TABLE screenings ADD COLUMN review_requested BOOLEAN DEFAULT 0"))
+                if "review_status" not in screenings_cols:
+                    conn.execute(text("ALTER TABLE screenings ADD COLUMN review_status VARCHAR(50) DEFAULT 'NOT_REQUESTED'"))
+                if "doctor_suggestion" not in screenings_cols:
+                    conn.execute(text("ALTER TABLE screenings ADD COLUMN doctor_suggestion TEXT"))
+                if "doctor_contact_info" not in screenings_cols:
+                    conn.execute(text("ALTER TABLE screenings ADD COLUMN doctor_contact_info VARCHAR(120)"))
+                if "reviewed_at" not in screenings_cols:
+                    conn.execute(text("ALTER TABLE screenings ADD COLUMN reviewed_at TIMESTAMP"))
                 
                 res_pat = conn.execute(text("PRAGMA table_info(patients)"))
                 patient_cols = {row[1] for row in res_pat.fetchall()}

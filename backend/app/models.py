@@ -73,6 +73,15 @@ class Screening(Base):
     uploaded_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     reviewed_by_doctor_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
 
+    # Doctor Review & Contact Workflow
+    patient_phone = Column(String(30), nullable=True)
+    patient_email = Column(String(120), nullable=True)
+    review_requested = Column(Boolean, default=False, index=True)
+    review_status = Column(String(50), default="NOT_REQUESTED", index=True)
+    doctor_suggestion = Column(Text, nullable=True)
+    doctor_contact_info = Column(String(120), nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+
     # Legacy pipeline & audit columns
     raw_image_path = Column(String(500), nullable=True)
     preprocessed_image_path = Column(String(500), nullable=True)
@@ -343,7 +352,7 @@ class PatientCreate(BaseModel):
     diabetes_history: Optional[str] = "Type 2 Diabetes"
 
 class PatientResponse(PatientCreate):
-    id: str
+    id: Union[str, int]
     created_at: datetime
     class Config:
         from_attributes = True
@@ -445,6 +454,14 @@ class ScreeningDetailResponse(BaseModel):
     systemic_risk: str = "Low Systemic Risk"
     next_screening_interval: str = "12 Months (Annual Screening)"
     bilingual_explanation: Optional[BilingualExplanation] = None
+    patient_phone: Optional[str] = None
+    patient_email: Optional[str] = None
+    review_requested: bool = False
+    review_status: str = "NOT_REQUESTED"
+    doctor_suggestion: Optional[str] = None
+    doctor_contact_info: Optional[str] = None
+    reviewed_at: Optional[Union[datetime, str]] = None
+    reviewed_by_doctor_name: Optional[str] = None
 
     class Config:
         from_attributes = True

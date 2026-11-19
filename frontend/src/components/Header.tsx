@@ -2,7 +2,7 @@ import React from 'react';
 import { Eye, Activity, FileText, Stethoscope, Sparkles, UserCheck, Home, LogOut, LogIn, User as UserIcon } from 'lucide-react';
 import { UserProfile } from '../types';
 
-export type NavigationTab = 'intake' | 'studio' | 'demo' | 'review' | 'history';
+export type NavigationTab = 'intake' | 'studio' | 'demo' | 'review' | 'history' | 'doctor-portal';
 
 interface HeaderProps {
   activeTab: NavigationTab;
@@ -47,7 +47,7 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             </a>
 
-            {/* Navigation Items: Clean, Single-Line, Exactly 6 Tabs */}
+            {/* Navigation Items: Clean, Single-Line, Exactly 6 Tabs (plus Doctor Portal if logged in doctor) */}
             <nav className="hidden lg:flex items-center space-x-1.5 bg-[#081222]/80 p-1.5 rounded-full border border-[rgba(70,170,255,0.25)] backdrop-blur-md shadow-lg text-xs font-semibold whitespace-nowrap">
               {/* 1. Home (Routes to the main Landing Page) */}
               <a
@@ -133,6 +133,23 @@ export const Header: React.FC<HeaderProps> = ({
                 <FileText className="w-3.5 h-3.5 shrink-0" />
                 <span className="whitespace-nowrap">Past Records</span>
               </button>
+
+              {/* 7. Doctor Portal: Strictly displayed ONLY for authenticated doctors */}
+              {isDoctor && (
+                <button
+                  type="button"
+                  onClick={() => onTabChange('doctor-portal')}
+                  className={`flex items-center space-x-1.5 px-3.5 py-2 rounded-full transition-all duration-200 whitespace-nowrap ${
+                    activeTab === 'doctor-portal'
+                      ? 'bg-teal-500 text-slate-950 shadow-[0_0_14px_rgba(20,184,166,0.5)] font-black'
+                      : 'text-teal-300 hover:text-white hover:bg-teal-950/40'
+                  }`}
+                  title="Ophthalmologist Portal & Patient Review Queue"
+                >
+                  <Stethoscope className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                  <span className="whitespace-nowrap">Doctor Portal</span>
+                </button>
+              )}
             </nav>
 
             {/* User Profile, Role Badge & Logout */}
@@ -180,7 +197,7 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </header>
 
-      {/* Mobile Floating Bottom Dock (Screen < 1024px) - 6 Clean Items */}
+      {/* Mobile Floating Bottom Dock (Screen < 1024px) */}
       <nav className="lg:hidden fixed bottom-3 inset-x-3 z-50 bg-[#081222]/95 backdrop-blur-xl border border-[rgba(70,170,255,0.35)] rounded-2xl shadow-[0_4px_30px_rgba(0,0,0,0.8)] p-1.5 flex items-center justify-around text-[10px] font-semibold text-[#9ab0c9] whitespace-nowrap">
         <a
           href="/prototype"
@@ -227,7 +244,7 @@ export const Header: React.FC<HeaderProps> = ({
           }`}
         >
           <Stethoscope className="w-4 h-4 mb-0.5" />
-          <span>Doctor</span>
+          <span>Review</span>
         </button>
 
         <button
@@ -239,6 +256,18 @@ export const Header: React.FC<HeaderProps> = ({
           <FileText className="w-4 h-4 mb-0.5" />
           <span>Records</span>
         </button>
+
+        {isDoctor && (
+          <button
+            onClick={() => onTabChange('doctor-portal')}
+            className={`flex flex-col items-center py-1.5 px-2 rounded-xl transition-all whitespace-nowrap ${
+              activeTab === 'doctor-portal' ? 'text-teal-400 font-bold bg-teal-500/10' : 'hover:text-white'
+            }`}
+          >
+            <Stethoscope className="w-4 h-4 mb-0.5 text-teal-400" />
+            <span>Portal</span>
+          </button>
+        )}
       </nav>
     </>
   );

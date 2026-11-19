@@ -7,7 +7,11 @@ import {
   UserProfile,
   UserRole,
   UserProfileUpdateRequest,
-  AuthSession
+  AuthSession,
+  ReviewRequestPayload,
+  DoctorReviewActionPayload,
+  DoctorStats,
+  DoctorQueueItem
 } from '../types';
 
 export const BACKEND_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
@@ -389,4 +393,99 @@ export async function demoSwitchRole(role: string): Promise<AuthSession> {
     full_name: resData.full_name || user.full_name,
     user
   };
+}
+
+
+// =====================================================================
+// DOCTOR REVIEW & CLINICAL PORTAL APIS
+// =====================================================================
+
+export async function requestDoctorReview(
+  recordId: string,
+  payload: ReviewRequestPayload
+): Promise<any> {
+  const res = await fetch(`${API_BASE}/screenings/${recordId}/request-review`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders()
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to submit review request to ophthalmologist.');
+  }
+  return res.json();
+}
+
+export async function getDoctorStats(): Promise<DoctorStats> {
+  const res = await fetch(`${API_BASE}/doctor/stats`, {
+    headers: {
+      ...getAuthHeaders()
+    }
+  });
+  if (!res.ok) {
+    if (res.status === 403) {
+      throw new Error('Access restricted: Doctor credentials required.');
+    }
+    if (res.status === 401) {
+      throw new Error('Please log in with a doctor account.');
+    }
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to fetch doctor portal metrics.');
+  }
+  return res.json();
+}
+
+export async function getDoctorQueue(
+  statusFilter?: string,
+  icdrGrade?: number,
+  search?: string
+): Promise<DoctorQueueItem[]> {
+  const params = new URLSearchParams();
+  if (statusFilter && statusFilter !== 'ALL') params.append('status', statusFilter);
+  if (icdrGrade !== undefined && icdrGrade !== null) params.append('icdr_grade', String(icdrGrade));
+  if (search && search.trim()) params.append('search', search.trim());
+
+  const queryString = params.toString();
+  const url = queryString ? `${API_BASE}/doctor/queue?${queryString}` : `${API_BASE}/doctor/queue`;
+  const res = await fetch(url, {
+    headers: {
+      ...getAuthHeaders()
+    }
+  });
+  if (!res.ok) {
+    if (res.status === 403) {
+      throw new Error('Access restricted: Doctor credentials required.');
+    }
+    if (res.status === 401) {
+      throw new Error('Please log in with a doctor account.');
+    }
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to load doctor review queue.');
+  }
+  return res.json();
+}
+
+export async function submitDoctorPortalReview(
+  recordId: string,
+  payload: DoctorReviewActionPayload
+): Promise<any> {
+  const res = await fetch(`${API_BASE}/doctor/screenings/${recordId}/review`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders()
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    if (res.status === 403) {
+      throw new Error('Access restricted: Only verified doctors can submit clinical evaluations.');
+    }
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to submit clinical evaluation.');
+  }
+  return res.json();
 }

@@ -12,7 +12,7 @@ from sqlalchemy import cast, String as SqlString, or_
 from app.database import get_db
 from app.config import UPLOAD_DIR, REPORT_DIR
 from app.models import Screening, Patient, DoctorReview, ScreeningDetailResponse, IqaResult, User
-from app.schemas import ScreeningSignOffRequest
+from app.schemas import ScreeningSignOffRequest, ReviewRequestPayload
 from app.services.screening_service import ScreeningService
 from app.core.iqa import ImageQualityAssessor
 from app.core.report_generator import PDFReportGenerator
@@ -222,7 +222,15 @@ def list_screenings(
             "created_at": s.created_at.isoformat() if s.created_at else None,
             "billing_status": s.billing_status or ("₹0 Charged — Waived by IQA Gatekeeper" if not s.iqa_passed else "₹25 Valid Scan"),
             "systemic_risk": s.systemic_risk or "Low Systemic Risk",
-            "next_screening_interval": s.next_screening_interval or "12 Months"
+            "next_screening_interval": s.next_screening_interval or "12 Months",
+            "patient_phone": getattr(s, "patient_phone", None),
+            "patient_email": getattr(s, "patient_email", None),
+            "review_requested": bool(getattr(s, "review_requested", False)),
+            "review_status": getattr(s, "review_status", "NOT_REQUESTED") or "NOT_REQUESTED",
+            "doctor_suggestion": getattr(s, "doctor_suggestion", None) or (doctor.clinical_notes if doctor else None),
+            "doctor_contact_info": getattr(s, "doctor_contact_info", None),
+            "reviewed_at": s.reviewed_at.isoformat() if getattr(s, "reviewed_at", None) else (doctor.reviewed_at.isoformat() if doctor and doctor.reviewed_at else None),
+            "reviewed_by_doctor_name": (s.reviewed_by_doctor.full_name or s.reviewed_by_doctor.username) if getattr(s, "reviewed_by_doctor", None) else (doctor.doctor_name if doctor else None)
         })
 
     return {
@@ -309,6 +317,50 @@ def sign_off_screening(
         "approval_status": screening.approval_status,
         "clinician_notes": screening.clinician_notes,
         "updated_at": now_utc.isoformat(),
+        "screening": screening_dict
+    }
+
+
+@router.post("/{record_id}/request-review", summary="Request Ophthalmologist Review")
+def request_doctor_review(
+    record_id: str,
+    payload: ReviewRequestPayload,
+    db: Session = Depends(get_db)
+):
+    """
+    Submits a patient request for doctor/specialist review.
+    Updates review_requested = True, review_status = 'PENDING_REVIEW',
+    and stores patient contact phone/email.
+    """
+    screening = db.query(Screening).filter(
+        or_(
+            Screening.record_id == str(record_id),
+            cast(Screening.id, SqlString) == str(record_id)
+        )
+    ).first()
+    if not screening:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Screening record {record_id} not found.")
+
+    target_record_id = screening.record_id or str(screening.id)
+    screening.review_requested = True
+    screening.review_status = "PENDING_REVIEW"
+    if payload.patient_phone:
+        screening.patient_phone = payload.patient_phone
+    if payload.patient_email:
+        screening.patient_email = payload.patient_email
+    if payload.notes:
+        existing_notes = screening.clinician_notes or ""
+        screening.clinician_notes = f"{existing_notes}\n[Patient Note]: {payload.notes}".strip()
+
+    db.commit()
+    db.refresh(screening)
+    screening_dict = service.get_screening_dict(db, target_record_id)
+
+    return {
+        "status": "success",
+        "record_id": target_record_id,
+        "review_status": screening.review_status,
+        "message": "Screening record has been submitted to the ophthalmologist review queue.",
         "screening": screening_dict
     }
 
