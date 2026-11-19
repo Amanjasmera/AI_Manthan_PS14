@@ -426,28 +426,48 @@ class PDFReportGenerator:
         elements.append(Spacer(1, 8))
 
         # =====================================================================
-        # 8. CLINICIAN TELE-OPHTHALMOLOGY REVIEW SECTION
+        # 8. CLINICIAN TELE-OPHTHALMOLOGY REVIEW & VERIFIED DIGITAL STAMP
         # =====================================================================
         doctor = screening_data.get("doctor_review")
-        doc_name = doctor.get("doctor_name", "Awaiting Clinician Review") if doctor else "Awaiting Clinician Review"
-        doc_notes = doctor.get("clinical_notes", "No notes recorded yet.") if doctor else "Pending ophthalmologist review."
-        doc_grade = f"Grade {doctor.get('confirmed_grade')}" if doctor else "Unconfirmed"
+        doc_name = screening_data.get("reviewed_by_doctor_name") or (doctor.get("doctor_name") if doctor else "Awaiting Clinician Review")
+        doc_notes = screening_data.get("doctor_suggestion") or (doctor.get("clinical_notes") if doctor else "Pending ophthalmologist review.")
+        
+        final_grade_val = screening_data.get("doctor_final_grade")
+        if final_grade_val is None and doctor:
+            final_grade_val = doctor.get("confirmed_grade")
+        
+        is_overridden = bool(screening_data.get("ai_overridden")) or (doctor.get("was_overridden") if doctor else False)
+        
+        if final_grade_val is not None:
+            override_badge = "<font color='#DC2626'><b>[CLINICIAN OVERRIDDEN]</b></font>" if is_overridden else "<font color='#059669'><b>[AI AGREED]</b></font>"
+            doc_grade = f"Grade {final_grade_val} {override_badge}"
+        else:
+            doc_grade = "Unconfirmed"
+
+        stamp_status = "VERIFIED & SIGNED" if (screening_data.get("approval_status") == "CLINICIAN_SIGNED_OFF" or screening_data.get("review_status") in ("REVIEWED", "URGENT_FOLLOWUP")) else "PENDING REVIEW"
+        reviewed_time_str = screening_data.get("reviewed_at") or (doctor.get("reviewed_at") if doctor else "N/A")
+        if reviewed_time_str and "T" in str(reviewed_time_str):
+            try:
+                reviewed_dt = datetime.fromisoformat(str(reviewed_time_str).replace("Z", ""))
+                reviewed_time_str = reviewed_dt.strftime("%d %b %Y, %I:%M %p UTC")
+            except Exception:
+                pass
 
         doc_table = Table([
             [
                 Paragraph(f"<b>Reviewing Clinician:</b> {doc_name}", body_style),
-                Paragraph(f"<b>Confirmed Grade:</b> {doc_grade}", body_style),
-                Paragraph("<b>Clinician Signature:</b> ________________", body_style)
+                Paragraph(f"<b>Doctor Confirmed Grade:</b> {doc_grade}", body_style),
+                Paragraph(f"<b>Digital Stamp:</b> <font color='{'#059669' if stamp_status == 'VERIFIED & SIGNED' else '#D97706'}'><b>✓ {stamp_status}</b></font>", body_style)
             ],
             [
-                Paragraph(f"<b>Clinical Notes / Plan:</b> {doc_notes}", body_style),
-                Paragraph(f"<b>License #:</b> {doctor.get('doctor_license', 'MCI-REG-AI') if doctor else 'MCI-REG-AI'}", body_style),
-                Paragraph(f"<b>Review Status:</b> {screening_data.get('status', 'ANALYZED')}", body_style)
+                Paragraph(f"<b>Clinical Suggestion / Rx:</b> {doc_notes}", body_style),
+                Paragraph(f"<b>License ID:</b> {doctor.get('doctor_license', 'MCI-CLINICAL') if doctor else 'MCI-CLINICAL'}", body_style),
+                Paragraph(f"<b>Timestamp:</b> {reviewed_time_str}", body_style)
             ]
-        ], colWidths=[220, 150, 180])
+        ], colWidths=[210, 190, 150])
         doc_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#F8FAFC")),
-            ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+            ('BOX', (0, 0), (-1, -1), 0.75, colors.HexColor("#0D9488") if stamp_status == "VERIFIED & SIGNED" else colors.HexColor("#CBD5E1")),
             ('TOPPADDING', (0, 0), (-1, -1), 4),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
             ('LEFTPADDING', (0, 0), (-1, -1), 6),

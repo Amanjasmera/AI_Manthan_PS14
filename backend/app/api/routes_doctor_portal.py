@@ -204,6 +204,8 @@ def get_doctor_review_queue(
             doctor_contact_info=s.doctor_contact_info,
             reviewed_at=s.reviewed_at.isoformat() if s.reviewed_at else (doctor.reviewed_at.isoformat() if doctor and doctor.reviewed_at else None),
             reviewed_by_doctor_name=doc_name,
+            doctor_final_grade=s.doctor_final_grade if s.doctor_final_grade is not None else (doctor.confirmed_grade if doctor else None),
+            ai_overridden=bool(s.ai_overridden) if s.ai_overridden is not None else (doctor.was_overridden if doctor else False),
             created_at=s.created_at.isoformat() if s.created_at else None,
             referral_urgency=s.referral_urgency or "ROUTINE",
             status=s.status or "ANALYZED"
@@ -235,6 +237,17 @@ def submit_doctor_portal_review(
     target_record_id = screening.record_id or str(screening.id)
     now_utc = datetime.utcnow()
 
+    final_grade = payload.doctor_final_grade if payload.doctor_final_grade is not None else payload.confirmed_grade
+    ai_grade = screening.predicted_grade if screening.predicted_grade is not None else (screening.icdr_grade or 0)
+
+    if final_grade is not None:
+        screening.doctor_final_grade = final_grade
+        screening.ai_overridden = bool(final_grade != ai_grade)
+        screening.icdr_grade = final_grade
+    else:
+        screening.doctor_final_grade = ai_grade
+        screening.ai_overridden = False
+
     # Update screening fields
     screening.doctor_suggestion = payload.doctor_suggestion
     screening.review_status = payload.review_status
@@ -248,14 +261,10 @@ def submit_doctor_portal_review(
     screening.doctor_notes = payload.doctor_suggestion
     screening.requires_manual_doctor_review = False
 
-    if payload.confirmed_grade is not None:
-        screening.icdr_grade = payload.confirmed_grade
-        screening.predicted_grade = payload.confirmed_grade
-
     # Update or create DoctorReview record
     doc_name = current_user.full_name or current_user.username or "Doctor"
     doc_license = current_user.license_id or "MCI-CLINICAL"
-    effective_grade = screening.icdr_grade if screening.icdr_grade is not None else 0
+    effective_grade = screening.doctor_final_grade if screening.doctor_final_grade is not None else (screening.icdr_grade or 0)
 
     review = db.query(DoctorReview).filter(DoctorReview.screening_id == target_record_id).first()
     if not review:
@@ -264,7 +273,7 @@ def submit_doctor_portal_review(
             doctor_name=doc_name,
             doctor_license=doc_license,
             confirmed_grade=effective_grade,
-            was_overridden=(payload.confirmed_grade is not None and payload.confirmed_grade != screening.predicted_grade),
+            was_overridden=screening.ai_overridden,
             referral_recommendation="Specialist clinical review complete.",
             clinical_notes=payload.doctor_suggestion,
             reviewed_at=now_utc
@@ -274,6 +283,7 @@ def submit_doctor_portal_review(
         review.doctor_name = doc_name
         review.doctor_license = doc_license
         review.confirmed_grade = effective_grade
+        review.was_overridden = screening.ai_overridden
         review.clinical_notes = payload.doctor_suggestion
         review.reviewed_at = now_utc
 
@@ -289,6 +299,10 @@ def submit_doctor_portal_review(
         "approval_status": screening.approval_status,
         "doctor_suggestion": screening.doctor_suggestion,
         "doctor_contact_info": screening.doctor_contact_info,
+        "doctor_final_grade": screening.doctor_final_grade,
+        "ai_overridden": screening.ai_overridden,
+        "reviewed_by_doctor_name": doc_name,
+        "doctor_license": doc_license,
         "reviewed_at": now_utc.isoformat(),
         "screening": screening_dict
     }

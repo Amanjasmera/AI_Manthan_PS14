@@ -386,6 +386,8 @@ class ScreeningService:
             "doctor_suggestion": getattr(screening, "doctor_suggestion", None) or (doctor.clinical_notes if doctor else None),
             "doctor_contact_info": getattr(screening, "doctor_contact_info", None),
             "reviewed_at": screening.reviewed_at.isoformat() if getattr(screening, "reviewed_at", None) else (doctor.reviewed_at.isoformat() if doctor and doctor.reviewed_at else None),
+            "doctor_final_grade": getattr(screening, "doctor_final_grade", None) if getattr(screening, "doctor_final_grade", None) is not None else (doctor.confirmed_grade if doctor else None),
+            "ai_overridden": bool(getattr(screening, "ai_overridden", False)) or (doctor.was_overridden if doctor else False),
             "bilingual_explanation": {
                 "en": triage.get("patient_explanation_en", ""),
                 "hi": triage.get("patient_explanation_hi", "")

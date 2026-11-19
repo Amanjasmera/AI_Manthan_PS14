@@ -8,6 +8,8 @@ interface AuthModalProps {
   onClose: () => void;
   onAuthSuccess: (user: UserProfile, token: string) => void;
   initialMode?: 'login' | 'register';
+  initialRole?: 'user' | 'doctor';
+  noticeMessage?: string;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -15,23 +17,39 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onClose,
   onAuthSuccess,
   initialMode = 'login',
+  initialRole = 'user',
+  noticeMessage,
 }) => {
   const [mode, setMode] = useState<'login' | 'register'>(initialMode);
   
   // Login fields
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
-  const [loginRole, setLoginRole] = useState<'user' | 'doctor'>('user');
+  const [loginRole, setLoginRole] = useState<'user' | 'doctor'>(initialRole);
   
   // Register fields
   const [regFullName, setRegFullName] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
-  const [regRole, setRegRole] = useState<'user' | 'doctor'>('user');
+  const [regRole, setRegRole] = useState<'user' | 'doctor'>(initialRole);
   const [regLicense, setRegLicense] = useState('');
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Sync role and mode when opened or when initialRole/initialMode prop changes
+  React.useEffect(() => {
+    if (isOpen) {
+      if (initialRole) {
+        setLoginRole(initialRole);
+        setRegRole(initialRole);
+      }
+      if (initialMode) {
+        setMode(initialMode);
+      }
+      setError(null);
+    }
+  }, [isOpen, initialRole, initialMode]);
 
   if (!isOpen) return null;
 
@@ -122,6 +140,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </p>
           </div>
         </div>
+
+        {/* Notice Message (e.g. Please log in to access this feature) */}
+        {noticeMessage && (
+          <div className="mb-4 p-3 rounded-xl bg-sky-500/15 border border-sky-500/40 text-sky-200 text-xs flex items-center space-x-2.5 shadow-md">
+            <Lock className="w-4 h-4 shrink-0 text-sky-400" />
+            <span className="font-sans font-medium">{noticeMessage}</span>
+          </div>
+        )}
 
         {/* Tab Switcher: Sign In vs Register */}
         <div className="flex rounded-xl bg-[rgba(4,12,24,0.85)] p-1 border border-[rgba(70,170,255,0.25)] mb-5 text-xs font-heading font-bold">

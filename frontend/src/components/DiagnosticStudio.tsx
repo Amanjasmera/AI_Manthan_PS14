@@ -412,34 +412,75 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
                 </div>
               </div>
 
-              {/* Doctor Review Card if reviewed or urgent followup */}
+              {/* Doctor Review Card & Verified Digital Sign-Off Stamp */}
               {(screeningData.doctor_suggestion || screeningData.review_status === 'REVIEWED' || screeningData.review_status === 'URGENT_FOLLOWUP') && (
-                <div className="p-4 sm:p-5 rounded-2xl bg-teal-950/40 border border-teal-500/30 text-white space-y-3 shadow-lg shadow-teal-500/5">
-                  <div className="flex items-center justify-between">
+                <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-950/50 via-teal-950/40 to-slate-900 border-2 border-emerald-500/50 text-white space-y-3.5 shadow-xl shadow-teal-500/10">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-emerald-500/20 pb-2.5">
+                    <div className="flex items-center space-x-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400 shrink-0">
+                        <CheckCircle2 className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-black text-emerald-400 uppercase tracking-wider flex items-center space-x-1.5">
+                          <span>✓ CLINICALLY VERIFIED & SIGNED</span>
+                        </div>
+                        <div className="text-xs text-slate-300 font-semibold">
+                          Ophthalmologist Tele-Review Sign-Off
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="flex items-center space-x-2">
-                      <Stethoscope className="w-5 h-5 text-teal-400" />
-                      <span className="font-bold text-sm text-teal-300">
-                        {lang === 'hi' ? 'नेत्र विशेषज्ञ की समीक्षा एवं सलाह' : "Doctor's Review & Clinical Suggestion"}
+                      {(screeningData.ai_overridden || (screeningData.doctor_final_grade != null && screeningData.doctor_final_grade !== pred?.predicted_grade)) ? (
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-400/40 shadow-[0_0_8px_rgba(251,191,36,0.2)]">
+                          ⚡ Clinician Overridden: Grade {screeningData.doctor_final_grade ?? currentGrade}
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 shadow-[0_0_8px_rgba(52,211,153,0.2)]">
+                          ✓ AI Agreed: Grade {screeningData.doctor_final_grade ?? currentGrade}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Stamp Details Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs p-2.5 rounded-xl bg-slate-950/70 border border-white/5">
+                    <div>
+                      <span className="text-slate-400 text-[10px] block">Reviewing Clinician:</span>
+                      <span className="font-bold text-white">
+                        {screeningData.reviewed_by_doctor_name || doctor?.doctor_name || 'Dr. Amit Roy, MS'}
+                      </span>
+                      {doctor?.doctor_license && (
+                        <span className="text-[10px] text-slate-400 block font-mono">
+                          License: {doctor.doctor_license}
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <span className="text-slate-400 text-[10px] block">Confirmed Final Grade:</span>
+                      <span className="font-bold text-white">
+                        Grade {screeningData.doctor_final_grade ?? currentGrade} ({pred?.grade_name || 'Verified'})
                       </span>
                     </div>
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                      screeningData.review_status === 'URGENT_FOLLOWUP'
-                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                        : 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
-                    }`}>
-                      {screeningData.review_status === 'URGENT_FOLLOWUP' ? 'Urgent Followup' : 'Doctor Verified'}
-                    </span>
+                    <div>
+                      <span className="text-slate-400 text-[10px] block">Signed Timestamp:</span>
+                      <span className="text-slate-300 font-mono text-[11px]">
+                        {screeningData.reviewed_at ? new Date(screeningData.reviewed_at).toLocaleString() : (doctor?.reviewed_at ? new Date(doctor.reviewed_at).toLocaleString() : new Date().toLocaleString())}
+                      </span>
+                    </div>
                   </div>
 
-                  {screeningData.reviewed_by_doctor_name && (
-                    <p className="text-xs text-slate-300 font-medium">
-                      Evaluated by: <span className="text-white font-semibold">{screeningData.reviewed_by_doctor_name}</span>
-                    </p>
+                  {/* Clinical Suggestion & Prescription */}
+                  {screeningData.doctor_suggestion && (
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
+                        Clinical Recommendation / Prescription:
+                      </span>
+                      <div className="p-3 rounded-xl bg-slate-900/90 border border-white/5 text-xs text-slate-200 leading-relaxed font-sans">
+                        {screeningData.doctor_suggestion}
+                      </div>
+                    </div>
                   )}
-
-                  <div className="p-3 rounded-xl bg-slate-900/80 border border-white/5 text-xs text-slate-200 leading-relaxed font-sans">
-                    {screeningData.doctor_suggestion}
-                  </div>
 
                   {screeningData.doctor_contact_info && (
                     <div className="flex items-center justify-between text-xs pt-2 border-t border-white/5">

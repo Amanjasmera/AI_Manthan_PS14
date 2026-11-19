@@ -81,6 +81,8 @@ class Screening(Base):
     doctor_suggestion = Column(Text, nullable=True)
     doctor_contact_info = Column(String(120), nullable=True)
     reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    doctor_final_grade = Column(Integer, nullable=True)
+    ai_overridden = Column(Boolean, default=False, index=True)
 
     # Legacy pipeline & audit columns
     raw_image_path = Column(String(500), nullable=True)
@@ -462,6 +464,8 @@ class ScreeningDetailResponse(BaseModel):
     doctor_contact_info: Optional[str] = None
     reviewed_at: Optional[Union[datetime, str]] = None
     reviewed_by_doctor_name: Optional[str] = None
+    doctor_final_grade: Optional[int] = None
+    ai_overridden: bool = False
 
     class Config:
         from_attributes = True

@@ -94,6 +94,8 @@ export interface ScreeningDetail {
   doctor_contact_info?: string;
   reviewed_at?: string;
   reviewed_by_doctor_name?: string;
+  doctor_final_grade?: number | null;
+  ai_overridden?: boolean;
   bilingual_explanation?: {
     en: string;
     hi: string;
@@ -124,6 +126,8 @@ export interface ScreeningListItem {
   doctor_contact_info?: string;
   reviewed_at?: string;
   reviewed_by_doctor_name?: string;
+  doctor_final_grade?: number | null;
+  ai_overridden?: boolean;
 }
 
 export interface SystemHealth {
@@ -195,6 +199,7 @@ export interface DoctorReviewActionPayload {
   review_status: 'REVIEWED' | 'URGENT_FOLLOWUP' | string;
   doctor_contact_info?: string;
   confirmed_grade?: number;
+  doctor_final_grade?: number;
 }
 
 export interface DoctorStats {
@@ -239,6 +244,8 @@ export interface DoctorQueueItem {
   doctor_contact_info?: string | null;
   reviewed_at?: string | null;
   reviewed_by_doctor_name?: string | null;
+  doctor_final_grade?: number | null;
+  ai_overridden?: boolean;
   created_at?: string | null;
   referral_urgency?: string;
   status?: string;

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Header, NavigationTab } from './components/Header';
+import { HomeView } from './components/HomeView';
 import { PatientIntake, ActivePatientState } from './components/PatientIntake';
 import { DemoModeView } from './components/DemoModeView';
 import { ImageUploader } from './components/ImageUploader';
@@ -31,23 +32,36 @@ export default function App() {
 
   // Authentication & RBAC User State
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => getStoredUser());
+  const [authRolePref, setAuthRolePref] = useState<'user' | 'doctor'>('user');
+  const [authNoticeMessage, setAuthNoticeMessage] = useState<string | null>(null);
 
-  // Default active tab: Guests start in 'demo'; Authenticated users start in 'intake'
+  const isDoctor = currentUser?.role?.toLowerCase() === 'doctor';
+
+  // Default active tab based on role and URL parameters
   const [activeTab, setActiveTab] = useState<NavigationTab>(() => {
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab') as NavigationTab | null;
     const user = getStoredUser();
 
-    if (tabParam && ['demo', 'intake', 'studio', 'review', 'doctor-portal'].includes(tabParam)) {
-      if (!user && tabParam !== 'demo') {
-        return 'demo';
+    if (user) {
+      if (user.role?.toLowerCase() === 'doctor') {
+        if (tabParam && ['doctor-portal', 'home', 'demo'].includes(tabParam)) {
+          return tabParam;
+        }
+        return 'doctor-portal';
+      } else {
+        if (tabParam && ['home', 'demo', 'intake', 'studio', 'review'].includes(tabParam)) {
+          return tabParam;
+        }
+        return 'intake';
       }
-      if (tabParam === 'doctor-portal' && user?.role?.toLowerCase() !== 'doctor') {
-        return 'demo';
-      }
-      return tabParam;
     }
-    return user ? 'intake' : 'demo';
+
+    // Guest / Unauthenticated: Default to 'home', or 'demo' if explicitly requested
+    if (tabParam === 'demo') {
+      return 'demo';
+    }
+    return 'home';
   });
 
   // Active patient demographics & symptoms from Intake
@@ -67,6 +81,7 @@ export default function App() {
 
   const handleAuthSuccess = (user: UserProfile, _token: string) => {
     setCurrentUser(user);
+    setAuthNoticeMessage(null);
     if (user.role?.toLowerCase() === 'doctor') {
       handleTabChange('doctor-portal');
     } else {
@@ -78,9 +93,10 @@ export default function App() {
   const handleLogout = () => {
     clearAuthSession();
     setCurrentUser(null);
-    setActiveTab('demo');
+    setAuthNoticeMessage(null);
+    setActiveTab('home');
     const url = new URL(window.location.href);
-    url.searchParams.set('tab', 'demo');
+    url.searchParams.set('tab', 'home');
     window.history.replaceState({}, '', url.toString());
     loadInitialData();
   };
@@ -101,30 +117,46 @@ export default function App() {
     const tabParam = params.get('tab') as NavigationTab | null;
     const user = getStoredUser();
 
-    if (tabParam && ['demo', 'intake', 'studio', 'review', 'doctor-portal'].includes(tabParam)) {
-      if (!user && tabParam !== 'demo') {
-        setActiveTab('demo');
+    if (!user) {
+      // If unauthenticated visitor tries to access any protected tab via URL
+      if (tabParam && ['intake', 'studio', 'review', 'doctor-portal'].includes(tabParam)) {
+        setActiveTab('home');
+        setAuthRolePref(tabParam === 'doctor-portal' ? 'doctor' : 'user');
+        setAuthNoticeMessage("Please log in to access this feature.");
         setIsAuthOpen(true);
-      } else if (tabParam === 'doctor-portal' && user?.role?.toLowerCase() !== 'doctor') {
-        setActiveTab('demo');
-      } else {
-        setActiveTab(tabParam);
+        const url = new URL(window.location.href);
+        url.searchParams.set('tab', 'home');
+        window.history.replaceState({}, '', url.toString());
       }
+    } else if (user.role?.toLowerCase() !== 'doctor' && tabParam === 'doctor-portal') {
+      // User trying to access doctor portal
+      setActiveTab('intake');
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', 'intake');
+      window.history.replaceState({}, '', url.toString());
+    } else if (user.role?.toLowerCase() === 'doctor' && tabParam && ['intake', 'studio', 'review'].includes(tabParam)) {
+      // Doctor trying to access user intake tabs
+      setActiveTab('doctor-portal');
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', 'doctor-portal');
+      window.history.replaceState({}, '', url.toString());
     }
   }, []);
 
   const handleTabChange = (tab: NavigationTab) => {
-    // 1. Public Access: 'demo' is available to everyone without login
-    if (tab === 'demo') {
-      setActiveTab('demo');
+    // 1. Public Access: 'home' and 'demo' are open to everyone without login
+    if (tab === 'home' || tab === 'demo') {
+      setActiveTab(tab);
       const url = new URL(window.location.href);
-      url.searchParams.set('tab', 'demo');
+      url.searchParams.set('tab', tab);
       window.history.replaceState({}, '', url.toString());
       return;
     }
 
-    // 2. Logged-In User Gate: 'intake', 'studio', 'review' require login
+    // 2. Strict Login Gate: 'intake', 'studio', 'review', and 'doctor-portal' require login
     if (!currentUser) {
+      setAuthRolePref(tab === 'doctor-portal' ? 'doctor' : 'user');
+      setAuthNoticeMessage("Please log in to access this feature.");
       setIsAuthOpen(true);
       return;
     }
@@ -132,8 +164,18 @@ export default function App() {
     // 3. Doctor Portal Gate: strictly requires doctor role
     if (tab === 'doctor-portal') {
       if (currentUser.role?.toLowerCase() !== 'doctor') {
+        setError("Access Denied: The Doctor Portal is restricted exclusively to certified ophthalmologists.");
         return;
       }
+    }
+
+    // 4. Clinician Workspace Focus: Doctors stay focused in doctor-portal
+    if (currentUser.role?.toLowerCase() === 'doctor' && ['intake', 'studio', 'review'].includes(tab)) {
+      setActiveTab('doctor-portal');
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', 'doctor-portal');
+      window.history.replaceState({}, '', url.toString());
+      return;
     }
 
     setActiveTab(tab);
@@ -156,6 +198,8 @@ export default function App() {
 
   const handleAnalyze = async (formData: FormData) => {
     if (!currentUser) {
+      setAuthRolePref('user');
+      setAuthNoticeMessage("Please log in to access this feature.");
       setIsAuthOpen(true);
       return;
     }
@@ -232,12 +276,16 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#04070d] text-[#eaf3ff] flex flex-col font-sans selection:bg-[#35b6ff] selection:text-[#04070d]">
-      {/* Top Header: NETRA X Unified Navigation Bar */}
+      {/* Top Header: NETRA X Dynamic Role-Based Navigation Bar */}
       <Header
         activeTab={activeTab}
         onTabChange={handleTabChange}
         currentUser={currentUser}
-        onOpenAuth={() => setIsAuthOpen(true)}
+        onOpenAuth={() => {
+          setAuthRolePref('user');
+          setAuthNoticeMessage(null);
+          setIsAuthOpen(true);
+        }}
         onLogout={handleLogout}
       />
 
@@ -261,8 +309,8 @@ export default function App() {
           </div>
         )}
 
-        {/* Guest Lock Screen Barrier if guest manually navigates to protected tabs */}
-        {!currentUser && activeTab !== 'demo' && (
+        {/* Guest Lock Screen Barrier if guest somehow lands on protected tabs */}
+        {!currentUser && !['home', 'demo'].includes(activeTab) && (
           <div className="min-h-[500px] flex items-center justify-center p-4">
             <div className="max-w-md w-full p-8 rounded-3xl bg-[#0F172A] border border-sky-500/30 text-center shadow-2xl space-y-5 animate-fade-in">
               <div className="w-16 h-16 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-sky-400 mx-auto flex items-center justify-center">
@@ -277,7 +325,11 @@ export default function App() {
               <div className="flex flex-col sm:flex-row gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setIsAuthOpen(true)}
+                  onClick={() => {
+                    setAuthRolePref('user');
+                    setAuthNoticeMessage("Please log in to access this feature.");
+                    setIsAuthOpen(true);
+                  }}
                   className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-400 hover:to-cyan-400 text-slate-950 font-bold text-xs transition-all shadow-lg shadow-sky-500/20 flex items-center justify-center space-x-1.5"
                 >
                   <LogIn className="w-4 h-4" />
@@ -295,6 +347,19 @@ export default function App() {
           </div>
         )}
 
+        {/* VIEW 0: CLUTTER-FREE HOME / LANDING PAGE (Public) */}
+        {activeTab === 'home' && (
+          <HomeView
+            currentUser={currentUser}
+            onNavigateTab={handleTabChange}
+            onOpenAuthWithRole={(role) => {
+              setAuthRolePref(role);
+              setAuthNoticeMessage(null);
+              setIsAuthOpen(true);
+            }}
+          />
+        )}
+
         {/* VIEW 1: DEDICATED DEMO MODE (Public, 100% In-Memory, No DB Required) */}
         {activeTab === 'demo' && (
           <DemoModeView
@@ -305,6 +370,8 @@ export default function App() {
             iqaRejection={iqaRejection}
             onOpenReview={() => {
               if (!currentUser) {
+                setAuthRolePref('user');
+                setAuthNoticeMessage("Please log in to access this feature.");
                 setIsAuthOpen(true);
               } else {
                 setIsReviewOpen(true);
@@ -316,7 +383,7 @@ export default function App() {
         )}
 
         {/* VIEW 2: PATIENT INTAKE (Step 1 Entry for Real Patients - Logged In Users Only) */}
-        {currentUser && activeTab === 'intake' && (
+        {currentUser && !isDoctor && activeTab === 'intake' && (
           <PatientIntake
             lang={lang}
             initialPatient={activePatient}
@@ -329,7 +396,7 @@ export default function App() {
         )}
 
         {/* VIEW 3: DIAGNOSTIC STUDIO (Focused Scan & Results - Logged In Users Only) */}
-        {currentUser && activeTab === 'studio' && (
+        {currentUser && !isDoctor && activeTab === 'studio' && (
           <div className="space-y-6 pop-in">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
               
@@ -421,7 +488,7 @@ export default function App() {
         )}
 
         {/* VIEW 4: CLINICIAN REVIEW QUEUE (Logged In Users Only) */}
-        {currentUser && activeTab === 'review' && (
+        {currentUser && !isDoctor && activeTab === 'review' && (
           <div className="space-y-6 pop-in">
             <div className="glass-panel p-6 shadow-2xl flex items-center justify-between rounded-2xl border border-[rgba(70,170,255,0.2)]">
               <div className="flex items-center space-x-3.5">
@@ -451,10 +518,14 @@ export default function App() {
         )}
 
         {/* VIEW 5: DEDICATED REAL-WORLD DOCTOR PORTAL (Clinician Workspace - Doctors Only) */}
-        {currentUser && activeTab === 'doctor-portal' && (
+        {currentUser && isDoctor && activeTab === 'doctor-portal' && (
           <DoctorPortal
-            onNavigateHome={() => handleTabChange('demo')}
-            onOpenLoginModal={() => setIsAuthOpen(true)}
+            onNavigateHome={() => handleTabChange('home')}
+            onOpenLoginModal={() => {
+              setAuthRolePref('doctor');
+              setAuthNoticeMessage(null);
+              setIsAuthOpen(true);
+            }}
           />
         )}
 
@@ -482,8 +553,13 @@ export default function App() {
       {/* Role-Based Authentication & Registration Modal */}
       <AuthModal
         isOpen={isAuthOpen}
-        onClose={() => setIsAuthOpen(false)}
+        onClose={() => {
+          setIsAuthOpen(false);
+          setAuthNoticeMessage(null);
+        }}
         onAuthSuccess={handleAuthSuccess}
+        initialRole={authRolePref}
+        noticeMessage={authNoticeMessage || undefined}
       />
     </div>
   );

@@ -117,6 +117,10 @@ def init_db():
                     conn.execute(text("ALTER TABLE screenings ADD COLUMN doctor_contact_info VARCHAR(120)"))
                 if "reviewed_at" not in screenings_cols:
                     conn.execute(text("ALTER TABLE screenings ADD COLUMN reviewed_at TIMESTAMP"))
+                if "doctor_final_grade" not in screenings_cols:
+                    conn.execute(text("ALTER TABLE screenings ADD COLUMN doctor_final_grade INTEGER"))
+                if "ai_overridden" not in screenings_cols:
+                    conn.execute(text("ALTER TABLE screenings ADD COLUMN ai_overridden BOOLEAN DEFAULT 0"))
                 
                 res_pat = conn.execute(text("PRAGMA table_info(patients)"))
                 patient_cols = {row[1] for row in res_pat.fetchall()}

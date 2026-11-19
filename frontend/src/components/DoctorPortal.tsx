@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   Stethoscope, AlertTriangle, Clock, CheckCircle2, Eye, Phone, Mail, 
   MessageSquare, ExternalLink, Search, Filter, RefreshCw, Send, Check, 
-  FileText, ShieldCheck, Sparkles, User, AlertCircle, ArrowRight
+  FileText, ShieldCheck, Sparkles, User, AlertCircle, ArrowRight,
+  ZoomIn, ZoomOut, RotateCcw
 } from 'lucide-react';
 import { 
   DoctorStats, DoctorQueueItem, DoctorReviewActionPayload, UserProfile 
@@ -47,7 +48,14 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
   // Active view layer on selected case
   const [viewLayer, setViewLayer] = useState<'normal' | 'heatmap'>('heatmap');
 
-  // Doctor Review Form state
+  // Zoom & Pan state for interactive retinal inspection
+  const [zoom, setZoom] = useState<number>(1);
+  const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Doctor Review Form state & Clinical Decision Mode
+  const [decisionMode, setDecisionMode] = useState<'agree' | 'override'>('agree');
   const [confirmedGrade, setConfirmedGrade] = useState<number>(0);
   const [actionStatus, setActionStatus] = useState<string>('REVIEWED');
   const [doctorSuggestion, setDoctorSuggestion] = useState<string>('');
@@ -106,15 +114,51 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
   // Synchronize form when selected case changes
   useEffect(() => {
     if (selectedCase) {
-      setConfirmedGrade(selectedCase.icdr_grade);
+      const isOverridden = Boolean(
+        selectedCase.ai_overridden || 
+        (selectedCase.doctor_final_grade != null && selectedCase.doctor_final_grade !== selectedCase.icdr_grade)
+      );
+      setDecisionMode(isOverridden ? 'override' : 'agree');
+      setConfirmedGrade(selectedCase.doctor_final_grade ?? selectedCase.icdr_grade);
       setActionStatus(selectedCase.icdr_grade >= 3 ? 'URGENT_FOLLOWUP' : 'REVIEWED');
       setDoctorSuggestion(selectedCase.doctor_suggestion || '');
       if (selectedCase.doctor_contact_info) {
         setClinicContact(selectedCase.doctor_contact_info);
       }
       setSubmitSuccess(false);
+      // Reset zoom and pan for new case inspection
+      setZoom(1);
+      setPan({ x: 0, y: 0 });
+      setIsDragging(false);
     }
   }, [selectedCase?.record_id]);
+
+  // Zoom & Pan inspection handlers
+  const handleZoomIn = () => setZoom((prev) => Math.min(prev + 0.5, 3));
+  const handleZoomOut = () => setZoom((prev) => Math.max(prev - 0.5, 1));
+  const handleResetZoom = () => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (zoom > 1) {
+      setIsDragging(true);
+      setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (isDragging && zoom > 1) {
+      setPan({
+        x: e.clientX - dragStart.x,
+        y: e.clientY - dragStart.y
+      });
+    }
+  };
+
+  const handleMouseUp = () => setIsDragging(false);
+  const handleMouseLeave = () => setIsDragging(false);
 
   // Submit doctor review
   const handleReviewSubmit = async (e: React.FormEvent) => {
@@ -127,11 +171,13 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
 
     try {
       setSubmittingReview(true);
+      const finalGrade = decisionMode === 'override' ? confirmedGrade : selectedCase.icdr_grade;
       const payload: DoctorReviewActionPayload = {
         doctor_suggestion: doctorSuggestion.trim(),
         review_status: actionStatus,
         doctor_contact_info: clinicContact.trim() || undefined,
-        confirmed_grade: confirmedGrade
+        confirmed_grade: finalGrade,
+        doctor_final_grade: finalGrade,
       };
 
       const res = await submitDoctorPortalReview(selectedCase.record_id, payload);
@@ -528,48 +574,113 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
                 </div>
               </div>
 
-              {/* Retinal Fundus & Heatmap Visualizer */}
+              {/* Retinal Fundus & Heatmap Visualizer with Interactive Zoom & Pan */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs font-semibold text-slate-300">
-                    <span>Retinal Saliency Visualization</span>
-                    <div className="flex items-center space-x-1 bg-slate-900 p-0.5 rounded-lg border border-white/5">
-                      <button
-                        type="button"
-                        onClick={() => setViewLayer('normal')}
-                        className={`px-2 py-1 rounded text-[11px] ${
-                          viewLayer === 'normal' ? 'bg-slate-700 text-white font-bold' : 'text-slate-400'
-                        }`}
-                      >
-                        Normal
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setViewLayer('heatmap')}
-                        className={`px-2 py-1 rounded text-[11px] ${
-                          viewLayer === 'heatmap' ? 'bg-rose-500 text-white font-bold' : 'text-slate-400'
-                        }`}
-                      >
-                        Grad-CAM
-                      </button>
+                    <div className="flex items-center space-x-2">
+                      <span>Clinical Inspection</span>
+                      <span className="font-mono text-[10px] text-teal-400 bg-teal-500/10 px-1.5 py-0.5 rounded border border-teal-500/20">
+                        {Math.round(zoom * 100)}%
+                      </span>
+                    </div>
+
+                    <div className="flex items-center space-x-1.5">
+                      {/* Zoom controls */}
+                      <div className="flex items-center space-x-0.5 bg-slate-900 p-0.5 rounded-lg border border-white/10 text-slate-300">
+                        <button
+                          type="button"
+                          onClick={handleZoomIn}
+                          disabled={zoom >= 3}
+                          className="p-1 rounded hover:bg-slate-800 hover:text-white disabled:opacity-40 transition"
+                          title="Zoom In (up to 3x)"
+                        >
+                          <ZoomIn className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleZoomOut}
+                          disabled={zoom <= 1}
+                          className="p-1 rounded hover:bg-slate-800 hover:text-white disabled:opacity-40 transition"
+                          title="Zoom Out"
+                        >
+                          <ZoomOut className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleResetZoom}
+                          disabled={zoom === 1 && pan.x === 0 && pan.y === 0}
+                          className="p-1 rounded hover:bg-slate-800 hover:text-white disabled:opacity-40 transition"
+                          title="Reset Zoom & Pan (1:1)"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      {/* Layer Switcher */}
+                      <div className="flex items-center space-x-0.5 bg-slate-900 p-0.5 rounded-lg border border-white/10">
+                        <button
+                          type="button"
+                          onClick={() => setViewLayer('normal')}
+                          className={`px-2 py-1 rounded text-[11px] transition ${
+                            viewLayer === 'normal' ? 'bg-slate-700 text-white font-bold' : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          Normal
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setViewLayer('heatmap')}
+                          className={`px-2 py-1 rounded text-[11px] transition ${
+                            viewLayer === 'heatmap' ? 'bg-rose-500 text-white font-bold' : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          Grad-CAM
+                        </button>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="relative aspect-square rounded-2xl overflow-hidden bg-black border border-white/10 flex items-center justify-center">
+                  {/* Interactive Viewport */}
+                  <div 
+                    onMouseDown={handleMouseDown}
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={handleMouseUp}
+                    onMouseLeave={handleMouseLeave}
+                    className={`relative aspect-square rounded-2xl overflow-hidden bg-black border border-white/10 flex items-center justify-center select-none ${
+                      zoom > 1 ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-default'
+                    }`}
+                  >
                     {viewLayer === 'normal' && selectedCase.raw_image_url ? (
                       <img
                         src={selectedCase.raw_image_url}
                         alt="Retinal Fundus"
-                        className="w-full h-full object-contain"
+                        draggable={false}
+                        style={{
+                          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                          transition: isDragging ? 'none' : 'transform 0.15s ease-out'
+                        }}
+                        className="w-full h-full object-contain pointer-events-none"
                       />
                     ) : selectedCase.heatmap_image_url ? (
                       <img
                         src={selectedCase.heatmap_image_url}
                         alt="Grad-CAM Saliency"
-                        className="w-full h-full object-contain"
+                        draggable={false}
+                        style={{
+                          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                          transition: isDragging ? 'none' : 'transform 0.15s ease-out'
+                        }}
+                        className="w-full h-full object-contain pointer-events-none"
                       />
                     ) : (
                       <div className="text-slate-500 text-xs">No image asset available</div>
+                    )}
+
+                    {zoom > 1 && (
+                      <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/75 backdrop-blur-md text-[10px] text-slate-300 font-mono border border-white/10 pointer-events-none">
+                        Drag to pan across retina
+                      </div>
                     )}
                   </div>
                 </div>
@@ -639,8 +750,67 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
                 </div>
               </div>
 
+              {/* VERIFIED DIGITAL SIGN-OFF STAMP (Displayed if already reviewed or just submitted) */}
+              {(selectedCase.reviewed_by_doctor_name || selectedCase.review_status === 'REVIEWED' || selectedCase.review_status === 'URGENT_FOLLOWUP' || submitSuccess) && (
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/50 via-teal-950/40 to-slate-900 border-2 border-emerald-500/50 text-white shadow-xl space-y-3 animate-fade-in">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-emerald-500/20 pb-2.5">
+                    <div className="flex items-center space-x-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400 shrink-0">
+                        <CheckCircle2 className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-black text-emerald-400 uppercase tracking-wider flex items-center space-x-1.5">
+                          <span>✓ CLINICALLY VERIFIED & SIGNED</span>
+                        </div>
+                        <div className="text-xs text-slate-300 font-semibold">
+                          Certified Ophthalmologist Tele-Review
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      {(selectedCase.ai_overridden || (decisionMode === 'override' && confirmedGrade !== selectedCase.icdr_grade)) ? (
+                        <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-400/40 shadow-[0_0_10px_rgba(251,191,36,0.2)]">
+                          ⚡ Clinician Overridden: Grade {selectedCase.doctor_final_grade ?? confirmedGrade}
+                        </span>
+                      ) : (
+                        <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 shadow-[0_0_10px_rgba(52,211,153,0.2)]">
+                          ✓ AI Agreed: Grade {selectedCase.doctor_final_grade ?? selectedCase.icdr_grade}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                    <div>
+                      <span className="text-slate-400 text-[10px] block">Reviewing Clinician:</span>
+                      <span className="font-bold text-white">
+                        {selectedCase.reviewed_by_doctor_name || currentUser?.full_name || 'Dr. Amit Roy, MS'}
+                      </span>
+                      {currentUser?.license_id && (
+                        <span className="text-[10px] text-slate-400 block font-mono">
+                          License: {currentUser.license_id}
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <span className="text-slate-400 text-[10px] block">Final Confirmed Grade:</span>
+                      <span className="font-bold text-white">
+                        Grade {selectedCase.doctor_final_grade ?? confirmedGrade}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 text-[10px] block">Signed At:</span>
+                      <span className="text-slate-300 font-mono text-[11px]">
+                        {selectedCase.reviewed_at ? new Date(selectedCase.reviewed_at).toLocaleString() : new Date().toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Doctor Review & Suggestion Form */}
-              <form onSubmit={handleReviewSubmit} className="p-5 rounded-2xl bg-slate-900/80 border border-teal-500/30 space-y-4">
+              <form onSubmit={handleReviewSubmit} className="p-5 rounded-2xl bg-slate-900/80 border border-teal-500/30 space-y-5">
                 <div className="flex items-center justify-between border-b border-white/10 pb-3">
                   <div className="flex items-center space-x-2">
                     <Stethoscope className="w-5 h-5 text-teal-400" />
@@ -654,73 +824,152 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Grade Override / Confirmation */}
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Confirm or Override Severity Grade
-                    </label>
-                    <select
-                      value={confirmedGrade}
-                      onChange={(e) => setConfirmedGrade(parseInt(e.target.value, 10))}
-                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-white/10 text-white text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
-                    >
-                      <option value={0}>Grade 0 — Normal Eye (No DR)</option>
-                      <option value={1}>Grade 1 — Mild Non-Proliferative DR</option>
-                      <option value={2}>Grade 2 — Moderate Non-Proliferative DR</option>
-                      <option value={3}>Grade 3 — Severe Non-Proliferative DR</option>
-                      <option value={4}>Grade 4 — Proliferative DR (PDR)</option>
-                    </select>
+                {/* Clinical Grading Decision (Agree with AI vs Override Grade) */}
+                <div className="p-4 rounded-xl bg-slate-950 border border-white/10 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <span className="text-xs font-bold text-slate-300 block">
+                        Clinical Grading Decision
+                      </span>
+                      <span className="text-[11px] text-slate-400">
+                        AI Prediction: <span className="text-sky-300 font-bold font-mono">Grade {selectedCase.icdr_grade} — {selectedCase.stage_label}</span>
+                      </span>
+                    </div>
+
+                    {decisionMode === 'override' && (
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 self-start sm:self-auto">
+                        ⚡ Clinician Overridden: Grade {confirmedGrade}
+                      </span>
+                    )}
                   </div>
 
-                  {/* Review Status */}
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Final Review Status
-                    </label>
-                    <select
-                      value={actionStatus}
-                      onChange={(e) => setActionStatus(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-white/10 text-white text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
+                  {/* Toggle Selector */}
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDecisionMode('agree');
+                        setConfirmedGrade(selectedCase.icdr_grade);
+                      }}
+                      className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center space-x-1.5 ${
+                        decisionMode === 'agree'
+                          ? 'bg-emerald-500/20 border-emerald-400 text-white shadow-[0_0_12px_rgba(52,211,153,0.3)]'
+                          : 'bg-slate-900 border-white/10 text-slate-400 hover:text-white'
+                      }`}
                     >
-                      <option value="REVIEWED">REVIEWED (Standard Clinical Sign-Off)</option>
-                      <option value="URGENT_FOLLOWUP">URGENT_FOLLOWUP (Immediate Specialist Referral)</option>
-                    </select>
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Agree with AI (Grade {selectedCase.icdr_grade})</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDecisionMode('override');
+                      }}
+                      className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center space-x-1.5 ${
+                        decisionMode === 'override'
+                          ? 'bg-amber-500/20 border-amber-400 text-white shadow-[0_0_12px_rgba(251,191,36,0.3)]'
+                          : 'bg-slate-900 border-white/10 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Override Grade</span>
+                    </button>
                   </div>
+
+                  {/* If Override, show Dropdown for Grade 0 to Grade 4 */}
+                  {decisionMode === 'override' && (
+                    <div className="pt-2 animate-fade-in">
+                      <label className="block text-[11px] font-medium text-amber-300 mb-1">
+                        Select Overridden Clinical Grade:
+                      </label>
+                      <select
+                        value={confirmedGrade}
+                        onChange={(e) => setConfirmedGrade(parseInt(e.target.value, 10))}
+                        className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-amber-500/40 text-white text-xs focus:outline-none focus:ring-1 focus:ring-amber-400 font-semibold"
+                      >
+                        <option value={0}>Grade 0 — Normal Eye (No DR)</option>
+                        <option value={1}>Grade 1 — Mild Non-Proliferative DR</option>
+                        <option value={2}>Grade 2 — Moderate Non-Proliferative DR</option>
+                        <option value={3}>Grade 3 — Severe Non-Proliferative DR</option>
+                        <option value={4}>Grade 4 — Proliferative DR (PDR)</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
 
-                {/* Quick Templates */}
+                {/* Review Status Selector */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Final Referral Status
+                  </label>
+                  <select
+                    value={actionStatus}
+                    onChange={(e) => setActionStatus(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-white/10 text-white text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
+                  >
+                    <option value="REVIEWED">REVIEWED (Standard Clinical Sign-Off)</option>
+                    <option value="URGENT_FOLLOWUP">URGENT_FOLLOWUP (Immediate Specialist Referral)</option>
+                    <option value="PENDING_REVIEW">PENDING_REVIEW (Awaiting Retake or Further Data)</option>
+                  </select>
+                </div>
+
+                {/* 1-Click Quick Action Templates */}
                 <div className="space-y-1.5">
-                  <span className="text-[11px] text-slate-400 font-medium">Quick Clinical Templates:</span>
-                  <div className="flex flex-wrap gap-1.5">
+                  <span className="text-[11px] text-slate-400 font-medium">1-Click Quick Action Templates:</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    
+                    {/* Template 1: Urgent Referral */}
                     <button
                       type="button"
-                      onClick={() => applyTemplate('Normal retina confirmed. Continue routine annual screening. Maintain regular glycemic control.')}
-                      className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] transition-colors"
+                      onClick={() => {
+                        setActionStatus('URGENT_FOLLOWUP');
+                        setDoctorSuggestion("High-risk retinal changes detected. Please visit an ophthalmologist within 72 hours for dilation and further treatment.");
+                      }}
+                      className="p-2.5 rounded-xl bg-rose-950/60 hover:bg-rose-900 border border-rose-500/30 text-rose-200 text-left transition-all active:scale-95 space-y-1"
                     >
-                      + Normal Annual Followup
+                      <div className="text-xs font-bold flex items-center space-x-1 text-rose-300">
+                        <span>🚨 Urgent Referral (&lt;72h)</span>
+                      </div>
+                      <p className="text-[10px] text-rose-300/80 line-clamp-2">
+                        High-risk retinal changes detected. Visit ophthalmologist within 72h.
+                      </p>
                     </button>
+
+                    {/* Template 2: Routine Follow-up */}
                     <button
                       type="button"
-                      onClick={() => applyTemplate('Mild non-proliferative changes observed. Schedule repeat dilated exam in 6 months. Strict control of HbA1c and blood pressure.')}
-                      className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] transition-colors"
+                      onClick={() => {
+                        setActionStatus('REVIEWED');
+                        setDoctorSuggestion("No immediate threat detected. Maintain good blood sugar control and repeat retinal screening in 6 months.");
+                      }}
+                      className="p-2.5 rounded-xl bg-emerald-950/60 hover:bg-emerald-900 border border-emerald-500/30 text-emerald-200 text-left transition-all active:scale-95 space-y-1"
                     >
-                      + Mild 6-Mo Review
+                      <div className="text-xs font-bold flex items-center space-x-1 text-emerald-300">
+                        <span>✅ Routine Follow-up (6 Months)</span>
+                      </div>
+                      <p className="text-[10px] text-emerald-300/80 line-clamp-2">
+                        No immediate threat. Maintain sugar control & repeat in 6 months.
+                      </p>
                     </button>
+
+                    {/* Template 3: Retake Scan Needed */}
                     <button
                       type="button"
-                      onClick={() => applyTemplate('Moderate NPDR with suspected early macular edema. Optical Coherence Tomography (OCT) recommended within 3 weeks.')}
-                      className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] transition-colors"
+                      onClick={() => {
+                        setActionStatus('PENDING_REVIEW');
+                        setDoctorSuggestion("Image clarity is insufficient for final diagnosis. Please retake the fundus photo in better lighting.");
+                      }}
+                      className="p-2.5 rounded-xl bg-amber-950/60 hover:bg-amber-900 border border-amber-500/30 text-amber-200 text-left transition-all active:scale-95 space-y-1"
                     >
-                      + Moderate OCT Referral
+                      <div className="text-xs font-bold flex items-center space-x-1 text-amber-300">
+                        <span>📷 Retake Scan Needed</span>
+                      </div>
+                      <p className="text-[10px] text-amber-300/80 line-clamp-2">
+                        Image clarity insufficient. Retake fundus photo in better lighting.
+                      </p>
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => applyTemplate('Urgent vitreo-retinal evaluation required within 7 days. High risk of neovascularization or vitreous hemorrhage. Anti-VEGF / PRP workup advised.')}
-                      className="px-2.5 py-1 rounded-lg bg-rose-950/60 hover:bg-rose-900 border border-rose-500/30 text-rose-300 text-[10px] transition-colors"
-                    >
-                      + Urgent Vitreo-Retinal Referral
-                    </button>
+
                   </div>
                 </div>
 
@@ -757,10 +1006,10 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
                   <button
                     type="submit"
                     disabled={submittingReview}
-                    className="flex items-center space-x-2 px-6 py-2.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs shadow-lg shadow-teal-500/20 transition-all disabled:opacity-50"
+                    className="flex items-center space-x-2 px-6 py-2.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs shadow-lg shadow-teal-500/20 transition-all disabled:opacity-50 active:scale-95"
                   >
                     <Send className="w-4 h-4" />
-                    <span>{submittingReview ? 'Submitting Sign-Off...' : 'Submit Review & Notify Patient'}</span>
+                    <span>{submittingReview ? 'Submitting Sign-Off...' : 'Submit Review & Digital Sign-Off'}</span>
                   </button>
                 </div>
               </form>

@@ -157,3 +157,97 @@ def test_user_request_review_and_doctor_signoff_workflow(db_session):
     assert screening.doctor_contact_info == "+91 9988776655 (District Eye Hospital Helpline)"
     assert screening.reviewed_at is not None
     assert screening.reviewed_by_doctor_id == doctor_user.id
+    assert screening.doctor_final_grade == 3
+    assert screening.ai_overridden is False
+
+
+def test_doctor_grade_override_logic(db_session):
+    """
+    Tests doctor AI grade override vs agree behavior:
+    - If doctor_final_grade != icdr_grade, ai_overridden must be True
+    - If doctor_final_grade == icdr_grade, ai_overridden must be False
+    """
+    doctor_user = db_session.query(User).filter(User.role.ilike("doctor")).first()
+    assert doctor_user is not None
+
+    # Case A: Doctor overrides AI grade (AI said Grade 2, Doctor overrides to Grade 4)
+    rec_id_a = f"test-override-{uuid.uuid4().hex[:8]}"
+    patient_a = Patient(name="Ramesh Patel", age=62, gender="Male")
+    db_session.add(patient_a)
+    db_session.flush()
+
+    screening_a = Screening(
+        record_id=rec_id_a,
+        patient_id=patient_a.id,
+        eye_side="Left Eye (OS)",
+        icdr_grade=2,
+        stage_label="Moderate NPDR",
+        model_confidence=0.88,
+        entropy=0.22,
+        review_requested=True,
+        review_status="PENDING_REVIEW"
+    )
+    db_session.add(screening_a)
+    db_session.commit()
+
+    action_override = DoctorReviewActionPayload(
+        doctor_suggestion="Proliferative neovascularization observed at optic disc margin. Overriding grade to 4.",
+        review_status="URGENT_FOLLOWUP",
+        doctor_final_grade=4,
+        confirmed_grade=4
+    )
+    res_a = submit_doctor_portal_review(
+        record_id=rec_id_a,
+        payload=action_override,
+        current_user=doctor_user,
+        db=db_session
+    )
+    assert res_a["status"] == "success"
+    assert res_a["doctor_final_grade"] == 4
+    assert res_a["ai_overridden"] is True
+
+    db_session.refresh(screening_a)
+    assert screening_a.doctor_final_grade == 4
+    assert screening_a.ai_overridden is True
+    assert screening_a.reviewed_by_doctor_id == doctor_user.id
+
+    # Case B: Doctor agrees with AI grade (AI said Grade 1, Doctor confirms Grade 1)
+    rec_id_b = f"test-agree-{uuid.uuid4().hex[:8]}"
+    patient_b = Patient(name="Kavita Rao", age=45, gender="Female")
+    db_session.add(patient_b)
+    db_session.flush()
+
+    screening_b = Screening(
+        record_id=rec_id_b,
+        patient_id=patient_b.id,
+        eye_side="Right Eye (OD)",
+        icdr_grade=1,
+        stage_label="Mild NPDR",
+        model_confidence=0.94,
+        entropy=0.12,
+        review_requested=True,
+        review_status="PENDING_REVIEW"
+    )
+    db_session.add(screening_b)
+    db_session.commit()
+
+    action_agree = DoctorReviewActionPayload(
+        doctor_suggestion="Isolated microaneurysms only. Agree with Grade 1. Follow up in 6 months.",
+        review_status="REVIEWED",
+        doctor_final_grade=1,
+        confirmed_grade=1
+    )
+    res_b = submit_doctor_portal_review(
+        record_id=rec_id_b,
+        payload=action_agree,
+        current_user=doctor_user,
+        db=db_session
+    )
+    assert res_b["status"] == "success"
+    assert res_b["doctor_final_grade"] == 1
+    assert res_b["ai_overridden"] is False
+
+    db_session.refresh(screening_b)
+    assert screening_b.doctor_final_grade == 1
+    assert screening_b.ai_overridden is False
+

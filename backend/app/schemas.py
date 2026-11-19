@@ -48,6 +48,8 @@ class ScreeningBase(BaseModel):
     doctor_suggestion: Optional[str] = Field(None, description="Clinical recommendations, prescriptions, and advice")
     doctor_contact_info: Optional[str] = Field(None, description="Doctor/Clinic contact details for patient followup")
     reviewed_at: Optional[datetime] = Field(None, description="Timestamp when review was finalized")
+    doctor_final_grade: Optional[int] = Field(None, ge=0, le=4, description="Clinician confirmed/overridden ICDR grade")
+    ai_overridden: bool = Field(False, description="Flag indicating doctor confirmed grade differs from AI grade")
 
 class ScreeningCreate(ScreeningBase):
     record_id: Optional[str] = None
@@ -67,6 +69,7 @@ class DoctorReviewActionPayload(BaseModel):
     review_status: str = Field(..., description="Target status: REVIEWED or URGENT_FOLLOWUP")
     doctor_contact_info: Optional[str] = Field(None, description="Direct clinic contact number or email for patient")
     confirmed_grade: Optional[int] = Field(None, ge=0, le=4, description="Optional confirmed or overridden ICDR grade")
+    doctor_final_grade: Optional[int] = Field(None, ge=0, le=4, description="Clinician confirmed or overridden grade")
 
 class DoctorStatsResponse(BaseModel):
     pending_reviews: int = Field(0, description="Count of cases awaiting doctor review")
@@ -108,6 +111,8 @@ class DoctorQueueItem(BaseModel):
     doctor_contact_info: Optional[str] = None
     reviewed_at: Optional[str] = None
     reviewed_by_doctor_name: Optional[str] = None
+    doctor_final_grade: Optional[int] = None
+    ai_overridden: bool = False
     created_at: Optional[str] = None
     referral_urgency: Optional[str] = "ROUTINE"
     status: Optional[str] = "ANALYZED"
