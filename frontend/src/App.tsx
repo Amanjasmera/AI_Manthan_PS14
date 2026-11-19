@@ -7,12 +7,12 @@ import { DiagnosticStudio } from './components/DiagnosticStudio';
 import { PatientHistoryTable } from './components/PatientHistoryTable';
 import { DoctorReviewModal } from './components/DoctorReviewModal';
 import { ReportModal } from './components/ReportModal';
-import { DoctorPortal } from './components/DoctorPortal';
 import { AuthModal } from './components/AuthModal';
+import { DoctorPortal } from './components/DoctorPortal';
 import { Language } from './utils/language';
 import { ScreeningDetail, ScreeningListItem, UserProfile } from './types';
-import { uploadAndAnalyzeScreening, listScreenings, getScreeningDetail, getStoredUser, clearAuthSession, getCurrentUserProfile } from './services/api';
-import { Stethoscope, AlertTriangle, Eye, ShieldAlert } from 'lucide-react';
+import { uploadAndAnalyzeScreening, listScreenings, getScreeningDetail, getStoredUser, clearAuthSession } from './services/api';
+import { Stethoscope, AlertTriangle, Eye, ShieldAlert, LogIn, Lock } from 'lucide-react';
 
 const initialPatientState: ActivePatientState = {
   name: 'Rajesh Sharma',
@@ -28,7 +28,27 @@ const initialPatientState: ActivePatientState = {
 
 export default function App() {
   const [lang, setLang] = useState<Language>('en');
-  const [activeTab, setActiveTab] = useState<NavigationTab>('intake');
+
+  // Authentication & RBAC User State
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => getStoredUser());
+
+  // Default active tab: Guests start in 'demo'; Authenticated users start in 'intake'
+  const [activeTab, setActiveTab] = useState<NavigationTab>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get('tab') as NavigationTab | null;
+    const user = getStoredUser();
+
+    if (tabParam && ['demo', 'intake', 'studio', 'review', 'doctor-portal'].includes(tabParam)) {
+      if (!user && tabParam !== 'demo') {
+        return 'demo';
+      }
+      if (tabParam === 'doctor-portal' && user?.role?.toLowerCase() !== 'doctor') {
+        return 'demo';
+      }
+      return tabParam;
+    }
+    return user ? 'intake' : 'demo';
+  });
 
   // Active patient demographics & symptoms from Intake
   const [activePatient, setActivePatient] = useState<ActivePatientState>(initialPatientState);
@@ -45,21 +65,27 @@ export default function App() {
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
 
-  // Authentication & RBAC User State
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => getStoredUser());
-
   const handleAuthSuccess = (user: UserProfile, _token: string) => {
     setCurrentUser(user);
+    if (user.role?.toLowerCase() === 'doctor') {
+      handleTabChange('doctor-portal');
+    } else {
+      handleTabChange('intake');
+    }
     loadInitialData();
   };
 
   const handleLogout = () => {
     clearAuthSession();
     setCurrentUser(null);
+    setActiveTab('demo');
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', 'demo');
+    window.history.replaceState({}, '', url.toString());
     loadInitialData();
   };
 
-  // Fetch initial screening registry list without auto-selecting any screening
+  // Fetch initial screening registry list if user is logged in
   const loadInitialData = async () => {
     try {
       const res = await listScreenings(1, 50);
@@ -73,19 +99,67 @@ export default function App() {
     loadInitialData();
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab') as NavigationTab | null;
-    if (tabParam && ['intake', 'studio', 'demo', 'review', 'history', 'doctor-portal'].includes(tabParam)) {
-      setActiveTab(tabParam);
+    const user = getStoredUser();
+
+    if (tabParam && ['demo', 'intake', 'studio', 'review', 'doctor-portal'].includes(tabParam)) {
+      if (!user && tabParam !== 'demo') {
+        setActiveTab('demo');
+        setIsAuthOpen(true);
+      } else if (tabParam === 'doctor-portal' && user?.role?.toLowerCase() !== 'doctor') {
+        setActiveTab('demo');
+      } else {
+        setActiveTab(tabParam);
+      }
     }
   }, []);
 
   const handleTabChange = (tab: NavigationTab) => {
+    // 1. Public Access: 'demo' is available to everyone without login
+    if (tab === 'demo') {
+      setActiveTab('demo');
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', 'demo');
+      window.history.replaceState({}, '', url.toString());
+      return;
+    }
+
+    // 2. Logged-In User Gate: 'intake', 'studio', 'review' require login
+    if (!currentUser) {
+      setIsAuthOpen(true);
+      return;
+    }
+
+    // 3. Doctor Portal Gate: strictly requires doctor role
+    if (tab === 'doctor-portal') {
+      if (currentUser.role?.toLowerCase() !== 'doctor') {
+        return;
+      }
+    }
+
     setActiveTab(tab);
     const url = new URL(window.location.href);
     url.searchParams.set('tab', tab);
     window.history.replaceState({}, '', url.toString());
   };
 
+  // In-Memory Benchmark Case Selection (Pure In-Memory, No DB writes required)
+  const handleSelectDemoCase = (detail: ScreeningDetail | null, iqaError: string | null) => {
+    if (iqaError) {
+      setActiveScreening(null);
+      setIqaRejection(iqaError);
+    } else {
+      setActiveScreening(detail);
+      setIqaRejection(null);
+    }
+    setError(null);
+  };
+
   const handleAnalyze = async (formData: FormData) => {
+    if (!currentUser) {
+      setIsAuthOpen(true);
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     setIqaRejection(null);
@@ -102,12 +176,10 @@ export default function App() {
         setIqaRejection(null);
       }
 
-      // If called from intake, switch to studio to see results
       if (activeTab === 'intake') {
         setActiveTab('studio');
       }
 
-      // Refresh screening registry in background
       const res = await listScreenings(1, 50);
       setScreeningsList(res.items);
     } catch (err: any) {
@@ -160,7 +232,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#04070d] text-[#eaf3ff] flex flex-col font-sans selection:bg-[#35b6ff] selection:text-[#04070d]">
-      {/* Top Header: NETRA X Navigation Bar */}
+      {/* Top Header: NETRA X Unified Navigation Bar */}
       <Header
         activeTab={activeTab}
         onTabChange={handleTabChange}
@@ -189,8 +261,62 @@ export default function App() {
           </div>
         )}
 
-        {/* VIEW 1: PATIENT INTAKE (Step 1 Entry for Real Patients) */}
-        {activeTab === 'intake' && (
+        {/* Guest Lock Screen Barrier if guest manually navigates to protected tabs */}
+        {!currentUser && activeTab !== 'demo' && (
+          <div className="min-h-[500px] flex items-center justify-center p-4">
+            <div className="max-w-md w-full p-8 rounded-3xl bg-[#0F172A] border border-sky-500/30 text-center shadow-2xl space-y-5 animate-fade-in">
+              <div className="w-16 h-16 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-sky-400 mx-auto flex items-center justify-center">
+                <Lock className="w-8 h-8" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-white font-heading">Sign In Required</h2>
+                <p className="text-xs text-slate-400 mt-2 leading-relaxed">
+                  Patient Intake, Live Scanning, and Doctor Reviews are protected features. Please sign in to access clinical workflows, or explore Demo Mode freely without an account.
+                </p>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAuthOpen(true)}
+                  className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-400 hover:to-cyan-400 text-slate-950 font-bold text-xs transition-all shadow-lg shadow-sky-500/20 flex items-center justify-center space-x-1.5"
+                >
+                  <LogIn className="w-4 h-4" />
+                  <span>Sign In / Register</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTabChange('demo')}
+                  className="flex-1 py-3 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-medium text-xs transition-colors"
+                >
+                  Explore Demo Mode
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* VIEW 1: DEDICATED DEMO MODE (Public, 100% In-Memory, No DB Required) */}
+        {activeTab === 'demo' && (
+          <DemoModeView
+            lang={lang}
+            onSelectSampleCase={handleSelectDemoCase}
+            isLoading={isLoading}
+            activeScreening={activeScreening}
+            iqaRejection={iqaRejection}
+            onOpenReview={() => {
+              if (!currentUser) {
+                setIsAuthOpen(true);
+              } else {
+                setIsReviewOpen(true);
+              }
+            }}
+            onOpenReport={() => setIsReportOpen(true)}
+            onSwitchToIntake={() => handleTabChange('intake')}
+          />
+        )}
+
+        {/* VIEW 2: PATIENT INTAKE (Step 1 Entry for Real Patients - Logged In Users Only) */}
+        {currentUser && activeTab === 'intake' && (
           <PatientIntake
             lang={lang}
             initialPatient={activePatient}
@@ -198,12 +324,12 @@ export default function App() {
               setActivePatient(patient);
               setActiveTab('studio');
             }}
-            onSwitchToDemo={() => setActiveTab('demo')}
+            onSwitchToDemo={() => handleTabChange('demo')}
           />
         )}
 
-        {/* VIEW 2: CLEANED-UP DIAGNOSTIC STUDIO (Focused Scan & Results Only) */}
-        {activeTab === 'studio' && (
+        {/* VIEW 3: DIAGNOSTIC STUDIO (Focused Scan & Results - Logged In Users Only) */}
+        {currentUser && activeTab === 'studio' && (
           <div className="space-y-6 pop-in">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
               
@@ -221,7 +347,6 @@ export default function App() {
               {/* Right Column: Clean Results Canvas (7 Cols) */}
               <div className="lg:col-span-7">
                 {isLoading ? (
-                  /* Minimal Smooth Scanning Radar Animation while analyzing */
                   <div className="min-h-[460px] glass-panel p-8 sm:p-12 rounded-2xl shadow-2xl flex flex-col items-center justify-center text-center space-y-5 border border-sky-500/30 bg-slate-950/80 pop-in">
                     <div className="relative w-28 h-28 flex items-center justify-center">
                       <div className="absolute inset-0 rounded-full border-2 border-dashed border-sky-400 animate-radar-sweep" />
@@ -240,7 +365,6 @@ export default function App() {
                     </div>
                   </div>
                 ) : iqaRejection ? (
-                  /* IQA Rejection Guard Alert */
                   <div className="min-h-[460px] glass-panel p-8 sm:p-12 border-2 border-rose-500/70 bg-rose-950/40 rounded-2xl shadow-2xl flex flex-col items-center justify-center text-center space-y-5 pop-in">
                     <div className="w-16 h-16 rounded-2xl bg-rose-900/60 border border-rose-500/80 flex items-center justify-center text-rose-300 shadow-[0_0_24px_rgba(244,63,94,0.4)]">
                       <ShieldAlert className="w-9 h-9 text-rose-400" />
@@ -260,7 +384,6 @@ export default function App() {
                     </div>
                   </div>
                 ) : activeScreening && (activeScreening.iqa?.passed && activeScreening.iqa_passed !== false) ? (
-                  /* ANALYZED STATE: Complete Diagnostic Studio View */
                   <DiagnosticStudio
                     screening={activeScreening}
                     lang={lang}
@@ -273,7 +396,6 @@ export default function App() {
                     }}
                   />
                 ) : (
-                  /* STANDBY STATE: Clean Awaiting Scan Card */
                   <div className="min-h-[460px] glass-panel p-8 sm:p-12 rounded-2xl shadow-2xl flex flex-col items-center justify-center text-center text-slate-400 space-y-4 pop-in border border-sky-500/25 bg-slate-950/70">
                     <div className="relative w-24 h-24 flex items-center justify-center mb-2">
                       <div className="absolute inset-0 rounded-full border border-dashed border-sky-500/30 animate-radar-sweep pointer-events-none" />
@@ -298,21 +420,8 @@ export default function App() {
           </div>
         )}
 
-        {/* VIEW 3: DEDICATED DEMO / SAMPLE BENCHMARK MODE */}
-        {activeTab === 'demo' && (
-          <DemoModeView
-            lang={lang}
-            onAnalyze={handleAnalyze}
-            isLoading={isLoading}
-            activeScreening={activeScreening}
-            onOpenReview={() => setIsReviewOpen(true)}
-            onOpenReport={() => setIsReportOpen(true)}
-            onSwitchToIntake={() => setActiveTab('intake')}
-          />
-        )}
-
-        {/* VIEW 4: CLINICIAN REVIEW QUEUE */}
-        {activeTab === 'review' && (
+        {/* VIEW 4: CLINICIAN REVIEW QUEUE (Logged In Users Only) */}
+        {currentUser && activeTab === 'review' && (
           <div className="space-y-6 pop-in">
             <div className="glass-panel p-6 shadow-2xl flex items-center justify-between rounded-2xl border border-[rgba(70,170,255,0.2)]">
               <div className="flex items-center space-x-3.5">
@@ -341,30 +450,10 @@ export default function App() {
           </div>
         )}
 
-        {/* VIEW 5: SCREENING REGISTRY */}
-        {activeTab === 'history' && (
-          <div className="space-y-6 pop-in">
-            <div className="glass-panel p-6 shadow-2xl rounded-2xl border border-[rgba(70,170,255,0.2)]">
-              <h1 className="font-heading font-black text-xl text-white">
-                Patient Longitudinal Screening Registry
-              </h1>
-              <p className="text-xs text-[#9ab0c9] mt-0.5">
-                Complete audit trail of all primary eye screenings, IQA pass/fails, and clinician overrides
-              </p>
-            </div>
-
-            <PatientHistoryTable
-              screenings={screeningsList}
-              lang={lang}
-              onSelectScreening={handleSelectScreening}
-            />
-          </div>
-        )}
-
-        {/* VIEW 6: DEDICATED REAL-WORLD DOCTOR PORTAL (Clinician Workspace) */}
-        {activeTab === 'doctor-portal' && (
+        {/* VIEW 5: DEDICATED REAL-WORLD DOCTOR PORTAL (Clinician Workspace - Doctors Only) */}
+        {currentUser && activeTab === 'doctor-portal' && (
           <DoctorPortal
-            onNavigateHome={() => handleTabChange('intake')}
+            onNavigateHome={() => handleTabChange('demo')}
             onOpenLoginModal={() => setIsAuthOpen(true)}
           />
         )}

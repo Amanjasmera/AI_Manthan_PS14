@@ -774,3 +774,4 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
     </div>
   );
 };
+
