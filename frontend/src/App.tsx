@@ -54,7 +54,19 @@ export default function App() {
 
   useEffect(() => {
     loadInitialData();
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get('tab') as NavigationTab | null;
+    if (tabParam && ['intake', 'studio', 'demo', 'review', 'history'].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
   }, []);
+
+  const handleTabChange = (tab: NavigationTab) => {
+    setActiveTab(tab);
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', tab);
+    window.history.replaceState({}, '', url.toString());
+  };
 
   const handleAnalyze = async (formData: FormData) => {
     setIsLoading(true);
@@ -134,7 +146,7 @@ export default function App() {
       {/* Top Header: NETRA X Navigation Bar */}
       <Header
         activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onTabChange={handleTabChange}
       />
 
       {/* Main Content Area */}
@@ -246,12 +258,12 @@ export default function App() {
                     </div>
                     <div className="max-w-md space-y-2">
                       <h3 className="font-heading font-black text-lg text-white">
-                        {lang === 'hi' ? 'रेटिना स्कैन विश्लेषण की प्रतीक्षा है' : 'Awaiting Retinal Scan Analysis'}
+                        {lang === 'hi' ? 'आँख की फोटो अपलोड करें (Ready for Eye Scan)' : 'Ready for Eye Scan (आँख की फोटो अपलोड करें)'}
                       </h3>
                       <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
                         {lang === 'hi'
                           ? `बाईं ओर मरीज ${activePatient.name} की ${activePatient.eyeSide === 'RIGHT' ? 'दाहिनी आँख (OD)' : 'बाईं आँख (OS)'} का फोटो अपलोड कर विश्लेषण प्रारंभ करें।`
-                          : `Upload a fundus photograph on the left for patient ${activePatient.name} (${activePatient.eyeSide === 'RIGHT' ? 'OD' : 'OS'}) to initiate automated AI grading.`}
+                          : `Upload a fundus photograph on the left for patient ${activePatient.name} (${activePatient.eyeSide === 'RIGHT' ? 'Right Eye - OD' : 'Left Eye - OS'}) to initiate automated AI grading.`}
                       </p>
                     </div>
                   </div>

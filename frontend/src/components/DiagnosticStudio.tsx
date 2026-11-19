@@ -247,11 +247,11 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
             )}
           </div>
 
-          {/* CARD 2: Suspected Microvascular Candidates (Clean 2x2 Grid with Zero Text Clipping) */}
+          {/* CARD 2: Detected Eye Spots & Vessel Changes (Clean 2x2 Grid with Zero Text Clipping) */}
           <div className="glass-panel p-5 shadow-xl rounded-2xl border border-[rgba(70,170,255,0.2)] space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-white tracking-wide">
-                {lang === 'hi' ? 'संभावित सूक्ष्मरक्तवाहिका लक्षण' : 'Suspected Microvascular Candidates'}
+                {lang === 'hi' ? 'आँख के धब्बे और नसों में बदलाव' : 'Detected Eye Spots & Vessel Changes'}
               </span>
               <span className="text-[10px] font-mono text-[#35b6ff] bg-[#35b6ff]/10 px-2 py-0.5 rounded border border-[#35b6ff]/30">
                 Morphological CV

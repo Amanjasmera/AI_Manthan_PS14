@@ -137,20 +137,20 @@ export const PatientIntake: React.FC<PatientIntakeProps> = ({
           <div>
             <div className="flex items-center space-x-2 mb-1.5">
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-sky-500/15 text-sky-300 border border-sky-500/30">
-                STEP 1 OF 2 • {lang === 'hi' ? 'मरीज पंजीकरण' : 'PATIENT INTAKE'}
+                STEP 1 OF 2 • {lang === 'hi' ? 'मरीज़ पंजीकरण' : 'PATIENT INTAKE'}
               </span>
               <span className="text-[10px] font-mono text-emerald-400 flex items-center space-x-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-ping" />
-                <span>{lang === 'hi' ? 'शिविर ऑपरेटर मोड' : 'Rural PHC Operator Mode'}</span>
+                <span>{lang === 'hi' ? 'शिविर ऑपरेटर मोड' : 'Rural Health Camp Mode'}</span>
               </span>
             </div>
             <h1 className="font-heading font-black text-xl sm:text-2xl text-white">
-              {lang === 'hi' ? 'मरीज विवरण एवं स्वास्थ्य इतिहास' : 'Patient Registration & Health Intake'}
+              {lang === 'hi' ? 'मरीज़ की जानकारी (New Patient Checkup)' : 'New Patient Checkup (मरीज़ की जानकारी)'}
             </h1>
             <p className="text-xs sm:text-sm text-slate-300/90 mt-1 leading-relaxed">
               {lang === 'hi'
-                ? 'रेटिना फोटो लेने से पहले मरीज की मूल जानकारी एवं लक्षण दर्ज करें।'
-                : 'Enter patient demographic details and clinical history before fundus photograph capture.'}
+                ? 'आँख की फोटो लेने से पहले मरीज की मूल जानकारी और बीमारी का इतिहास दर्ज करें।'
+                : 'Fill in basic patient details and eye history before taking the eye photo.'}
             </p>
           </div>
 
@@ -174,7 +174,7 @@ export const PatientIntake: React.FC<PatientIntakeProps> = ({
               1
             </div>
             <h2 className="font-heading font-bold text-sm sm:text-base text-white">
-              {lang === 'hi' ? 'मूल विवरण (Demographics)' : 'Basic Demographics'}
+              {lang === 'hi' ? '1. मरीज का विवरण (नाम और उम्र)' : '1. Patient Details (नाम और उम्र)'}
             </h2>
           </div>
 
@@ -236,10 +236,10 @@ export const PatientIntake: React.FC<PatientIntakeProps> = ({
               <label className="block text-xs font-semibold text-slate-300 mb-2 flex items-center justify-between">
                 <span className="flex items-center space-x-1.5">
                   <Eye className="w-3.5 h-3.5 text-sky-400" />
-                  <span>{lang === 'hi' ? 'जांची जाने वाली आँख (Eye to Evaluate)' : 'Eye to Evaluate for this Scan'}</span>
+                  <span>{lang === 'hi' ? 'कौन सी आँख की जाँच करनी है?' : 'Which Eye to Check? (कौन सी आँख की जाँच करनी है?)'}</span>
                   <span className="text-rose-400">*</span>
                 </span>
-                <span className="text-[11px] text-slate-400">OD = Right Eye, OS = Left Eye</span>
+                <span className="text-[11px] text-slate-400">Right Eye = OD, Left Eye = OS</span>
               </label>
 
               <div className="grid grid-cols-2 gap-3">
@@ -253,7 +253,7 @@ export const PatientIntake: React.FC<PatientIntakeProps> = ({
                   }`}
                 >
                   <span className="w-3 h-3 rounded-full bg-sky-400 shadow-[0_0_8px_#38bdf8]" />
-                  <span>{lang === 'hi' ? 'दाहिनी आँख (Right Eye - OD)' : 'Right Eye (OD)'}</span>
+                  <span>{lang === 'hi' ? 'दाईं आँख (Right Eye - OD)' : 'Right Eye (दाईं आँख)'}</span>
                 </button>
 
                 <button
@@ -266,7 +266,7 @@ export const PatientIntake: React.FC<PatientIntakeProps> = ({
                   }`}
                 >
                   <span className="w-3 h-3 rounded-full bg-sky-400 shadow-[0_0_8px_#38bdf8]" />
-                  <span>{lang === 'hi' ? 'बाईं आँख (Left Eye - OS)' : 'Left Eye (OS)'}</span>
+                  <span>{lang === 'hi' ? 'बाईं आँख (Left Eye - OS)' : 'Left Eye (बाईं आँख)'}</span>
                 </button>
               </div>
             </div>
@@ -281,10 +281,10 @@ export const PatientIntake: React.FC<PatientIntakeProps> = ({
             </div>
             <div>
               <h2 className="font-heading font-bold text-sm sm:text-base text-white">
-                {lang === 'hi' ? 'पूर्व बीमारी एवं आँख का इतिहास' : 'Previous Medical & Eye History'}
+                {lang === 'hi' ? '2. पुरानी बीमारी या आँख की तकलीफ़ (Health & Eye History)' : '2. Health & Eye History (पुरानी बीमारी या आँख की तकलीफ़)'}
               </h2>
               <p className="text-[11px] text-slate-400 font-medium">
-                {lang === 'hi' ? 'पहले कोई बीमारी या आँख का इलाज हुआ है?' : 'Select all conditions diagnosed previously'}
+                {lang === 'hi' ? 'पहले कोई बीमारी या आँख का इलाज हुआ है?' : 'Pehle koi bimari ya aankh ka ilaj hua hai? (Past medical conditions & eye surgeries)'}
               </p>
             </div>
           </div>
@@ -341,10 +341,10 @@ export const PatientIntake: React.FC<PatientIntakeProps> = ({
             </div>
             <div>
               <h2 className="font-heading font-bold text-sm sm:text-base text-white">
-                {lang === 'hi' ? 'वर्तमान लक्षण (Current Symptoms)' : 'Current Visual Symptoms'}
+                {lang === 'hi' ? '3. अभी की समस्या या लक्षण (Current Symptoms)' : '3. Current Symptoms (अभी क्या दिक्कत हो रही है?)'}
               </h2>
               <p className="text-[11px] text-slate-400 font-medium">
-                {lang === 'hi' ? 'अभी मरीज को क्या दिक्कत हो रही है?' : 'Select any symptoms experienced recently'}
+                {lang === 'hi' ? 'अभी क्या दिक्कत हो रही है?' : 'Abhi kya dikkat ho rahi hai? (Current vision symptoms or checkup)'}
               </p>
             </div>
           </div>
