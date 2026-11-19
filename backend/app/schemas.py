@@ -144,3 +144,25 @@ class ScreeningDeleteResponse(BaseModel):
     record_id: str
     message: str
 
+
+# =====================================================================
+# CLINIC DEVICE SCHEMAS
+# =====================================================================
+
+class ClinicDeviceCreate(BaseModel):
+    device_name: str = Field(..., min_length=2, max_length=120, description="e.g. Clinic Room 1 Fundus Cam")
+    device_model: str = Field(..., min_length=2, max_length=120, description="e.g. Topcon TRC-NW400 / USB Retinal Adapter")
+    connection_type: str = Field("USB_LIVE_CAMERA", description="USB_LIVE_CAMERA or NETWORK_API_PUSH")
+
+class ClinicDeviceResponse(BaseModel):
+    id: int
+    doctor_id: int
+    device_name: str
+    device_model: str
+    connection_type: str
+    device_api_key: str
+    status: str
+    created_at: Optional[datetime] = None
+    model_config = ConfigDict(from_attributes=True)
+
+

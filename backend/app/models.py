@@ -72,6 +72,7 @@ class Screening(Base):
     # RBAC Audit Links
     uploaded_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     reviewed_by_doctor_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    device_id = Column(Integer, ForeignKey("clinic_devices.id", ondelete="SET NULL"), nullable=True, index=True)
 
     # Doctor Review & Contact Workflow
     patient_phone = Column(String(30), nullable=True)
@@ -537,6 +538,32 @@ class User(Base):
     @property
     def password_hash(self):
         return self.hashed_password
+
+
+class ClinicDevice(Base):
+    """
+    clinic_devices table linked to the logged-in doctor:
+    - id (Integer, Primary Key, Index)
+    - doctor_id (Integer, Foreign Key -> users.id, ondelete="CASCADE")
+    - device_name (String — e.g., "Clinic Room 1 Fundus Cam")
+    - device_model (String — e.g., "Topcon TRC-NW400 / USB Retinal Adapter")
+    - connection_type (String: "USB_LIVE_CAMERA" or "NETWORK_API_PUSH")
+    - device_api_key (String, Unique — auto-generated secure token for network machines)
+    - status (String: "ONLINE" or "OFFLINE", default "ONLINE")
+    - created_at (DateTime with timezone, default UTC now)
+    """
+    __tablename__ = "clinic_devices"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    doctor_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    device_name = Column(String(120), nullable=False)
+    device_model = Column(String(120), nullable=False)
+    connection_type = Column(String(40), nullable=False, default="USB_LIVE_CAMERA")
+    device_api_key = Column(String(80), unique=True, nullable=False, index=True)
+    status = Column(String(20), nullable=False, default="ONLINE")
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, index=True)
+
+    doctor = relationship("User", backref="clinic_devices")
 
 
 class UserRegisterRequest(BaseModel):

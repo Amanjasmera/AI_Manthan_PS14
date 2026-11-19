@@ -11,7 +11,8 @@ import {
   ReviewRequestPayload,
   DoctorReviewActionPayload,
   DoctorStats,
-  DoctorQueueItem
+  DoctorQueueItem,
+  ClinicDevice
 } from '../types';
 
 export const BACKEND_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
@@ -489,3 +490,71 @@ export async function submitDoctorPortalReview(
   }
   return res.json();
 }
+
+// =====================================================================
+// CLINIC DEVICES & DIRECT RETINAL CAPTURE APIS
+// =====================================================================
+
+export async function getDoctorDevices(): Promise<ClinicDevice[]> {
+  const res = await fetch(`${API_BASE}/doctor/devices`, {
+    headers: {
+      ...getAuthHeaders()
+    }
+  });
+  if (!res.ok) {
+    if (res.status === 403) throw new Error('Doctor credentials required.');
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to fetch registered devices.');
+  }
+  return res.json();
+}
+
+export async function registerDoctorDevice(payload: {
+  device_name: string;
+  device_model: string;
+  connection_type: string;
+}): Promise<ClinicDevice> {
+  const res = await fetch(`${API_BASE}/doctor/devices`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders()
+    },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to register machine.');
+  }
+  return res.json();
+}
+
+export async function deleteDoctorDevice(deviceId: number): Promise<{ status: string; message: string }> {
+  const res = await fetch(`${API_BASE}/doctor/devices/${deviceId}`, {
+    method: 'DELETE',
+    headers: {
+      ...getAuthHeaders()
+    }
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to delete device.');
+  }
+  return res.json();
+}
+
+export async function captureDeviceEyeImage(formData: FormData): Promise<ScreeningDetail> {
+  const res = await fetch(`${API_BASE}/doctor/device-capture`, {
+    method: 'POST',
+    headers: {
+      ...getAuthHeaders()
+    },
+    body: formData
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Device retinal capture analysis failed.');
+  }
+  return res.json();
+}
+

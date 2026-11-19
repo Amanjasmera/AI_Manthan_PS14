@@ -12,12 +12,17 @@ from app.core.auth import seed_default_users, require_doctor
 from app.schemas import (
     ReviewRequestPayload,
     DoctorReviewActionPayload,
-    DoctorStatsResponse
+    DoctorStatsResponse,
+    ClinicDeviceCreate
 )
 from app.api.routes_doctor_portal import (
     get_doctor_portal_stats,
     get_doctor_review_queue,
-    submit_doctor_portal_review
+    submit_doctor_portal_review,
+    list_doctor_devices,
+    register_doctor_device,
+    delete_doctor_device,
+    capture_device_screening
 )
 from app.api.routes_screenings import request_doctor_review
 
@@ -250,4 +255,114 @@ def test_doctor_grade_override_logic(db_session):
     db_session.refresh(screening_b)
     assert screening_b.doctor_final_grade == 1
     assert screening_b.ai_overridden is False
+
+
+def test_doctor_devices_and_direct_capture_workflow(db_session):
+    """
+    Tests Clinic Imaging Devices & Direct Retinal Camera Capture:
+    1. Register new machine with auto-generated secure API token
+    2. List machines for authenticated doctor
+    3. Direct machine/camera retinal capture upload (IQA + 5-stage inference + PENDING_REVIEW)
+    4. Hardware push authentication via X-Device-Key
+    5. Delete device and verify cleanup
+    """
+    import asyncio
+    import io
+    import numpy as np
+    import cv2
+    from fastapi import UploadFile
+
+    doctor_user = db_session.query(User).filter(User.role.ilike("doctor")).first()
+    assert doctor_user is not None
+
+    # 1. Register new imaging device
+    dev_payload = ClinicDeviceCreate(
+        device_name="Room 2 Topcon Fundus Scanner",
+        device_model="Topcon TRC-NW400 USB Retinal Camera",
+        connection_type="USB_LIVE_CAMERA"
+    )
+    dev = register_doctor_device(payload=dev_payload, current_user=doctor_user, db=db_session)
+    assert dev.id is not None
+    assert dev.doctor_id == doctor_user.id
+    assert dev.device_name == "Room 2 Topcon Fundus Scanner"
+    assert dev.device_api_key.startswith("nx-dev-")
+    assert dev.status == "ONLINE"
+
+    # 2. List devices for doctor
+    devices = list_doctor_devices(current_user=doctor_user, db=db_session)
+    assert any(d.id == dev.id for d in devices)
+
+    # 3. Direct Camera Capture by doctor
+    # Create synthetic retinal eye frame that satisfies IQA checks
+    frame = np.zeros((512, 512, 3), dtype=np.uint8)
+    cv2.circle(frame, (256, 256), 220, (15, 60, 180), -1)  # Retinal background
+    cv2.circle(frame, (180, 256), 35, (120, 210, 245), -1)  # Optic disc
+    cv2.circle(frame, (330, 260), 20, (10, 40, 130), -1)   # Macula
+    _, img_encoded = cv2.imencode(".jpg", frame)
+    file_bytes = img_encoded.tobytes()
+
+    class MockUploadFile:
+        def __init__(self, filename: str, content: bytes):
+            self.filename = filename
+            self.content = content
+        def read(self):
+            return self.content
+
+    upload_file_1 = MockUploadFile(filename="live_fundus_cam.jpg", content=file_bytes)
+    capture_res = capture_device_screening(
+        file=upload_file_1,
+        patient_name="Rameshwar Prasad",
+        patient_age=62,
+        patient_gender="Male",
+        eye_side="Right Eye (OD)",
+        diabetes_history="Type 2 Diabetes",
+        symptoms=None,
+        device_id=dev.id,
+        x_device_key=None,
+        current_user=doctor_user,
+        db=db_session
+    )
+
+    assert capture_res is not None
+    rec_id = capture_res.get("record_id") or capture_res.get("id")
+    assert rec_id is not None
+    assert capture_res["review_status"] == "PENDING_REVIEW"
+    assert capture_res.get("requires_manual_doctor_review") is True
+
+    # Verify device linked in database
+    db_screening = db_session.query(Screening).filter(Screening.record_id == rec_id).first()
+    assert db_screening is not None
+    assert db_screening.device_id == dev.id
+    assert db_screening.review_status == "PENDING_REVIEW"
+
+    # 4. Machine Hardware Push via X-Device-Key
+    upload_file_2 = MockUploadFile(filename="machine_api_push.jpg", content=file_bytes)
+    push_res = capture_device_screening(
+        file=upload_file_2,
+        patient_name="Hardware Push Patient",
+        patient_age=54,
+        patient_gender="Female",
+        eye_side="Left Eye (OS)",
+        diabetes_history="Type 2 Diabetes",
+        symptoms=None,
+        device_id=None,
+        x_device_key=dev.device_api_key,
+        current_user=None, # authenticating purely via X-Device-Key
+        db=db_session
+    )
+
+    assert push_res is not None
+    push_rec_id = push_res.get("record_id") or push_res.get("id")
+    assert push_rec_id is not None
+    push_screening = db_session.query(Screening).filter(Screening.record_id == push_rec_id).first()
+    assert push_screening is not None
+    assert push_screening.device_id == dev.id
+    assert push_screening.review_status == "PENDING_REVIEW"
+
+    # 5. Delete device
+    del_res = delete_doctor_device(device_id=dev.id, current_user=doctor_user, db=db_session)
+    assert del_res["status"] == "success"
+    remaining = list_doctor_devices(current_user=doctor_user, db=db_session)
+    assert not any(d.id == dev.id for d in remaining)
+
 

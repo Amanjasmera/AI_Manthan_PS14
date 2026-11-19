@@ -250,3 +250,15 @@ export interface DoctorQueueItem {
   referral_urgency?: string;
   status?: string;
 }
+
+export interface ClinicDevice {
+  id: number;
+  doctor_id: number;
+  device_name: string;
+  device_model: string;
+  connection_type: 'USB_LIVE_CAMERA' | 'NETWORK_API_PUSH' | string;
+  device_api_key: string;
+  status: 'ONLINE' | 'OFFLINE' | string;
+  created_at?: string;
+}
+

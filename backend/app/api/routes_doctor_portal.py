@@ -8,19 +8,23 @@ Strictly guarded by RBAC: 401 Unauthorized if unauthenticated, 403 Forbidden if 
 """
 
 from datetime import datetime
+import uuid
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File, Form, Header
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_, desc, cast, String as SqlString
 
 from app.database import get_db
-from app.models import Screening, Patient, DoctorReview, User
-from app.core.auth import require_doctor
+from app.models import Screening, Patient, DoctorReview, User, ClinicDevice
+from app.core.auth import require_doctor, get_optional_current_user
 from app.schemas import (
     DoctorStatsResponse,
     DoctorQueueItem,
     DoctorQueuePatient,
-    DoctorReviewActionPayload
+    DoctorReviewActionPayload,
+    ClinicDeviceCreate,
+    ClinicDeviceResponse
 )
 from app.services.screening_service import ScreeningService
 
@@ -306,4 +310,163 @@ def submit_doctor_portal_review(
         "reviewed_at": now_utc.isoformat(),
         "screening": screening_dict
     }
+
+
+# =====================================================================
+# CLINIC IMAGING DEVICES & DIRECT CAMERA CAPTURE (DOCTOR PORTAL)
+# =====================================================================
+
+@router.get("/devices", response_model=List[ClinicDeviceResponse], summary="List Registered Imaging Devices")
+def list_doctor_devices(
+    current_user: User = Depends(require_doctor),
+    db: Session = Depends(get_db)
+):
+    """
+    List all fundus cameras, retinal adapters, and network imaging devices
+    registered to the logged-in ophthalmologist.
+    """
+    devices = db.query(ClinicDevice).filter(
+        ClinicDevice.doctor_id == current_user.id
+    ).order_by(desc(ClinicDevice.created_at)).all()
+    return devices
+
+
+@router.post("/devices", response_model=ClinicDeviceResponse, summary="Register New Clinic Imaging Device")
+def register_doctor_device(
+    payload: ClinicDeviceCreate,
+    current_user: User = Depends(require_doctor),
+    db: Session = Depends(get_db)
+):
+    """
+    Register a new clinic fundus camera or USB live camera adapter.
+    Generates a secure API token for direct hardware integrations.
+    """
+    api_key = f"nx-dev-{uuid.uuid4().hex}"
+    device = ClinicDevice(
+        doctor_id=current_user.id,
+        device_name=payload.device_name.strip(),
+        device_model=payload.device_model.strip(),
+        connection_type=payload.connection_type.strip(),
+        device_api_key=api_key,
+        status="ONLINE"
+    )
+    db.add(device)
+    db.commit()
+    db.refresh(device)
+    return device
+
+
+@router.delete("/devices/{device_id}", summary="Delete Registered Imaging Device")
+def delete_doctor_device(
+    device_id: int,
+    current_user: User = Depends(require_doctor),
+    db: Session = Depends(get_db)
+):
+    """
+    Removes a registered imaging device belonging to the doctor.
+    """
+    device = db.query(ClinicDevice).filter(
+        ClinicDevice.id == device_id,
+        ClinicDevice.doctor_id == current_user.id
+    ).first()
+    if not device:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Device with ID {device_id} not found or does not belong to you."
+        )
+    db.delete(device)
+    db.commit()
+    return {"status": "success", "message": f"Device {device_id} successfully deleted."}
+
+
+@router.post("/device-capture", summary="Direct Machine & Live Camera Retinal Capture")
+def capture_device_screening(
+    file: UploadFile = File(..., description="Fundus camera photo or live camera frame"),
+    patient_name: str = Form("Walk-in Patient"),
+    patient_age: Optional[int] = Form(50),
+    patient_gender: Optional[str] = Form("Other"),
+    eye_side: str = Form("Right Eye (OD)"),
+    diabetes_history: str = Form("Type 2 Diabetes"),
+    symptoms: Optional[str] = Form(None),
+    device_id: Optional[int] = Form(None),
+    x_device_key: Optional[str] = Header(None, alias="X-Device-Key"),
+    current_user: Optional[User] = Depends(get_optional_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Direct retinal capture endpoint for Doctor Portal.
+    Accepts captured eye image from live USB fundus camera viewfinder or machine push,
+    runs full AI pipeline (IQA + 5-stage grading + Grad-CAM heatmap), links device,
+    sets review_status='PENDING_REVIEW', and returns screening detail for instant inspection.
+    """
+    device = None
+    target_doctor_id = None
+
+    if x_device_key:
+        device = db.query(ClinicDevice).filter(ClinicDevice.device_api_key == x_device_key).first()
+        if not device:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid X-Device-Key token. Machine registration not found."
+            )
+        target_doctor_id = device.doctor_id
+    elif current_user:
+        if current_user.role.lower() != "doctor":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Doctor Portal access restricted to certified doctors."
+            )
+        target_doctor_id = current_user.id
+        if device_id:
+            device = db.query(ClinicDevice).filter(
+                ClinicDevice.id == device_id,
+                ClinicDevice.doctor_id == current_user.id
+            ).first()
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required: Provide Bearer token or X-Device-Key header."
+        )
+
+    if hasattr(file, "file") and hasattr(file.file, "read"):
+        file.file.seek(0)
+        image_bytes = file.file.read()
+    elif hasattr(file, "read"):
+        image_bytes = file.read()
+    else:
+        image_bytes = b""
+
+    if not image_bytes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded eye image is empty.")
+
+    try:
+        res = service.process_screening(
+            db=db,
+            image_bytes=image_bytes,
+            patient_name=patient_name,
+            age=patient_age or 50,
+            gender=patient_gender or "Other",
+            eye_side=eye_side,
+            diabetes_history=diabetes_history,
+            symptoms=symptoms,
+            uploaded_by_id=target_doctor_id
+        )
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    screening_id = res.get("record_id") or res.get("id")
+    if screening_id:
+        screening = db.query(Screening).filter(Screening.record_id == screening_id).first()
+        if screening:
+            if device:
+                screening.device_id = device.id
+            screening.review_requested = True
+            screening.review_status = "PENDING_REVIEW"
+            screening.requires_manual_doctor_review = True
+            db.commit()
+            db.refresh(screening)
+            return service.get_screening_dict(db, screening_id)
+
+    return res
+
 

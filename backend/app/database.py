@@ -103,6 +103,8 @@ def init_db():
                     conn.execute(text("ALTER TABLE screenings ADD COLUMN uploaded_by_id INTEGER"))
                 if "reviewed_by_doctor_id" not in screenings_cols:
                     conn.execute(text("ALTER TABLE screenings ADD COLUMN reviewed_by_doctor_id INTEGER"))
+                if "device_id" not in screenings_cols:
+                    conn.execute(text("ALTER TABLE screenings ADD COLUMN device_id INTEGER"))
                 if "patient_phone" not in screenings_cols:
                     conn.execute(text("ALTER TABLE screenings ADD COLUMN patient_phone VARCHAR(30)"))
                 if "patient_email" not in screenings_cols:
