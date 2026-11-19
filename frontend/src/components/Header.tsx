@@ -2,7 +2,7 @@ import React from 'react';
 import { Eye, Activity, Stethoscope, Sparkles, UserCheck, Home, LogOut, LogIn, User as UserIcon } from 'lucide-react';
 import { UserProfile } from '../types';
 
-export type NavigationTab = 'home' | 'demo' | 'intake' | 'studio' | 'review' | 'doctor-portal';
+export type NavigationTab = 'info' | 'home' | 'demo' | 'intake' | 'studio' | 'review' | 'doctor-portal';
 
 interface HeaderProps {
   activeTab: NavigationTab;
@@ -53,9 +53,24 @@ export const Header: React.FC<HeaderProps> = ({
             {/* DYNAMIC ROLE-BASED NAVIGATION BAR */}
             <nav className="hidden lg:flex items-center space-x-1 sm:space-x-1.5 bg-[#081222]/80 p-1.5 rounded-full border border-[rgba(70,170,255,0.25)] backdrop-blur-md shadow-lg text-xs font-semibold whitespace-nowrap">
               
-              {/* CASE 1: DOCTOR NAVBAR (Doctor Portal, Home, Demo Mode) */}
+              {/* CASE 1: DOCTOR NAVBAR (Info, Doctor Portal, Home, Demo Mode) */}
               {isDoctor && (
                 <>
+                  {/* Info (Interactive Eye & Clinical Guide) */}
+                  <button
+                    type="button"
+                    onClick={() => onTabChange('info')}
+                    className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-full transition-all duration-200 whitespace-nowrap ${
+                      activeTab === 'info'
+                        ? 'bg-[#35b6ff] text-[#04070d] shadow-[0_0_14px_rgba(53,182,255,0.5)] font-bold'
+                        : 'text-[#9ab0c9] hover:text-[#eaf3ff] hover:bg-slate-800/60'
+                    }`}
+                    title="Interactive Eye & Clinical Guide"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-[#35b6ff] shrink-0" />
+                    <span className="whitespace-nowrap">Info</span>
+                  </button>
+
                   {/* Doctor Portal (Primary / Default active for Doctor) */}
                   <button
                     type="button"
@@ -103,9 +118,24 @@ export const Header: React.FC<HeaderProps> = ({
                 </>
               )}
 
-              {/* CASE 2: REGULAR USER NAVBAR (Home, Demo Mode, Patient Intake, Eye Scan, Doctor Review) */}
+              {/* CASE 2: REGULAR USER NAVBAR (Info, Home, Demo Mode, Patient Intake, Eye Scan, Doctor Review) */}
               {isUser && (
                 <>
+                  {/* Info (Interactive Eye & Clinical Guide) */}
+                  <button
+                    type="button"
+                    onClick={() => onTabChange('info')}
+                    className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-full transition-all duration-200 whitespace-nowrap ${
+                      activeTab === 'info'
+                        ? 'bg-[#35b6ff] text-[#04070d] shadow-[0_0_14px_rgba(53,182,255,0.5)] font-bold'
+                        : 'text-[#9ab0c9] hover:text-[#eaf3ff] hover:bg-slate-800/60'
+                    }`}
+                    title="Interactive Eye & Clinical Guide"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-[#35b6ff] shrink-0" />
+                    <span className="whitespace-nowrap">Info</span>
+                  </button>
+
                   {/* Home */}
                   <button
                     type="button"
@@ -183,9 +213,24 @@ export const Header: React.FC<HeaderProps> = ({
                 </>
               )}
 
-              {/* CASE 3: GUEST NAVBAR (ONLY Home & Demo Mode — Zero Clutter) */}
+              {/* CASE 3: GUEST NAVBAR (Info, Home & Demo Mode) */}
               {isGuest && (
                 <>
+                  {/* Info (Interactive Eye & Clinical Guide) */}
+                  <button
+                    type="button"
+                    onClick={() => onTabChange('info')}
+                    className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full transition-all duration-200 whitespace-nowrap ${
+                      activeTab === 'info'
+                        ? 'bg-[#35b6ff] text-[#04070d] shadow-[0_0_14px_rgba(53,182,255,0.5)] font-bold'
+                        : 'text-[#9ab0c9] hover:text-[#eaf3ff] hover:bg-slate-800/60'
+                    }`}
+                    title="Interactive Eye & Clinical Guide"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-[#35b6ff] shrink-0" />
+                    <span className="whitespace-nowrap">Info</span>
+                  </button>
+
                   {/* Home */}
                   <button
                     type="button"
@@ -275,8 +320,17 @@ export const Header: React.FC<HeaderProps> = ({
         {isDoctor && (
           <>
             <button
+              onClick={() => onTabChange('info')}
+              className={`flex flex-col items-center py-1.5 px-2 rounded-xl transition-all whitespace-nowrap ${
+                activeTab === 'info' ? 'text-[#35b6ff] font-bold bg-[#35b6ff]/15' : 'hover:text-white'
+              }`}
+            >
+              <Eye className="w-4 h-4 mb-0.5 text-[#35b6ff]" />
+              <span>Info</span>
+            </button>
+            <button
               onClick={() => onTabChange('doctor-portal')}
-              className={`flex flex-col items-center py-1.5 px-3 rounded-xl transition-all whitespace-nowrap ${
+              className={`flex flex-col items-center py-1.5 px-2.5 rounded-xl transition-all whitespace-nowrap ${
                 activeTab === 'doctor-portal' ? 'text-teal-400 font-bold bg-teal-500/15' : 'hover:text-white'
               }`}
             >
@@ -307,6 +361,15 @@ export const Header: React.FC<HeaderProps> = ({
         {/* USER MOBILE DOCK */}
         {isUser && (
           <>
+            <button
+              onClick={() => onTabChange('info')}
+              className={`flex flex-col items-center py-1.5 px-2 rounded-xl transition-all whitespace-nowrap ${
+                activeTab === 'info' ? 'text-[#35b6ff] font-bold bg-[#35b6ff]/15' : 'hover:text-white'
+              }`}
+            >
+              <Eye className="w-4 h-4 mb-0.5 text-[#35b6ff]" />
+              <span>Info</span>
+            </button>
             <button
               onClick={() => onTabChange('home')}
               className={`flex flex-col items-center py-1.5 px-2 rounded-xl transition-all whitespace-nowrap ${
@@ -358,6 +421,15 @@ export const Header: React.FC<HeaderProps> = ({
         {/* GUEST MOBILE DOCK */}
         {isGuest && (
           <>
+            <button
+              onClick={() => onTabChange('info')}
+              className={`flex flex-col items-center py-1.5 px-3 rounded-xl transition-all whitespace-nowrap ${
+                activeTab === 'info' ? 'text-[#35b6ff] font-bold bg-[#35b6ff]/15' : 'hover:text-white'
+              }`}
+            >
+              <Eye className="w-4 h-4 mb-0.5 text-[#35b6ff]" />
+              <span>Info</span>
+            </button>
             <button
               onClick={() => onTabChange('home')}
               className={`flex flex-col items-center py-1.5 px-4 rounded-xl transition-all whitespace-nowrap ${

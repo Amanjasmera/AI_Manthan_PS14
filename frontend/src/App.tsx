@@ -13,7 +13,7 @@ import { DoctorPortal } from './components/DoctorPortal';
 import { Language } from './utils/language';
 import { ScreeningDetail, ScreeningListItem, UserProfile } from './types';
 import { uploadAndAnalyzeScreening, listScreenings, getScreeningDetail, getStoredUser, clearAuthSession } from './services/api';
-import { Stethoscope, AlertTriangle, Eye, ShieldAlert, LogIn, Lock } from 'lucide-react';
+import { Stethoscope, AlertTriangle, Eye, ShieldAlert, LogIn, Lock, ExternalLink, Sparkles } from 'lucide-react';
 
 const initialPatientState: ActivePatientState = {
   name: 'Rajesh Sharma',
@@ -45,19 +45,22 @@ export default function App() {
 
     if (user) {
       if (user.role?.toLowerCase() === 'doctor') {
-        if (tabParam && ['doctor-portal', 'home', 'demo'].includes(tabParam)) {
+        if (tabParam && ['info', 'doctor-portal', 'home', 'demo'].includes(tabParam)) {
           return tabParam;
         }
         return 'doctor-portal';
       } else {
-        if (tabParam && ['home', 'demo', 'intake', 'studio', 'review'].includes(tabParam)) {
+        if (tabParam && ['info', 'home', 'demo', 'intake', 'studio', 'review'].includes(tabParam)) {
           return tabParam;
         }
         return 'intake';
       }
     }
 
-    // Guest / Unauthenticated: Default to 'home', or 'demo' if explicitly requested
+    // Guest / Unauthenticated: Default to 'home', or 'info'/'demo' if explicitly requested
+    if (tabParam === 'info') {
+      return 'info';
+    }
     if (tabParam === 'demo') {
       return 'demo';
     }
@@ -144,8 +147,8 @@ export default function App() {
   }, []);
 
   const handleTabChange = (tab: NavigationTab) => {
-    // 1. Public Access: 'home' and 'demo' are open to everyone without login
-    if (tab === 'home' || tab === 'demo') {
+    // 1. Public Access: 'info', 'home' and 'demo' are open to everyone without login
+    if (tab === 'info' || tab === 'home' || tab === 'demo') {
       setActiveTab(tab);
       const url = new URL(window.location.href);
       url.searchParams.set('tab', tab);
@@ -343,6 +346,63 @@ export default function App() {
                   Explore Demo Mode
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* VIEW: INTERACTIVE EYE & CLINICAL GUIDE (INFO) (Public) */}
+        {activeTab === 'info' && (
+          <div className="w-full space-y-4 py-2 animate-fade-in">
+            {/* Header Telemetry Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-[#081222] via-[#0b172a] to-[#081222] border border-sky-500/30 backdrop-blur-xl shadow-2xl">
+              <div className="flex items-center space-x-3 sm:space-x-4">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-sky-500/20 border border-sky-400/40 text-sky-400 flex items-center justify-center shadow-[0_0_20px_rgba(56,189,248,0.35)] shrink-0">
+                  <Eye className="w-5 h-5 sm:w-6 sm:h-6 text-[#35b6ff]" />
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <h2 className="text-base sm:text-xl font-bold text-white font-heading">
+                      NETRA X — Retinal Screening, Explained
+                    </h2>
+                    <span className="text-[10px] font-mono uppercase px-2.5 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-500/30 hidden sm:inline-block">
+                      Interactive 3D HUD
+                    </span>
+                  </div>
+                  <p className="text-xs sm:text-sm text-slate-300 mt-0.5 font-sans">
+                    Explore 3D ocular anatomy, multi-stage DR simulation, lesion segmentations, and clinical precautions.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2.5">
+                <button
+                  type="button"
+                  onClick={() => handleTabChange('demo')}
+                  className="px-3.5 py-2 rounded-xl bg-amber-400/15 hover:bg-amber-400/25 border border-amber-400/30 text-amber-300 text-xs font-semibold flex items-center space-x-1.5 transition-all shadow-sm"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Try Demo Mode</span>
+                </button>
+                <a
+                  href="/prototype.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3.5 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs flex items-center space-x-1.5 transition-all shadow-[0_0_15px_rgba(56,189,248,0.3)]"
+                  title="Open Interactive Explorer Fullscreen in New Tab"
+                >
+                  <span>Fullscreen</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
+            </div>
+
+            {/* Embedded 3D WebGL Three.js Canvas Frame */}
+            <div className="w-full h-[78vh] sm:h-[84vh] rounded-3xl overflow-hidden border border-sky-500/30 shadow-[0_0_50px_rgba(4,7,13,0.9)] bg-[#04070d]">
+              <iframe
+                src="/prototype.html"
+                title="NETRA X Interactive Eye Explorer"
+                className="w-full h-full border-0"
+              />
             </div>
           </div>
         )}

@@ -8,7 +8,7 @@ import { UserProfile } from '../types';
 
 interface HomeViewProps {
   currentUser?: UserProfile | null;
-  onNavigateTab: (tab: 'demo' | 'intake' | 'studio' | 'review' | 'doctor-portal') => void;
+  onNavigateTab: (tab: 'info' | 'demo' | 'intake' | 'studio' | 'review' | 'doctor-portal') => void;
   onOpenAuthWithRole: (role: 'user' | 'doctor') => void;
 }
 
@@ -71,6 +71,16 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
             {/* Hero Action Buttons */}
             <div className="pt-3 flex flex-wrap items-center gap-3.5">
+              <button
+                type="button"
+                onClick={() => onNavigateTab('info')}
+                className="px-6 py-3.5 rounded-2xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-400/40 text-sky-300 hover:text-white font-bold text-sm transition-all shadow-[0_0_20px_rgba(56,189,248,0.2)] flex items-center space-x-2"
+                title="Launch Interactive 3D Eye & Retinal Screening Guide"
+              >
+                <Eye className="w-4 h-4 text-[#35b6ff]" />
+                <span>Interactive 3D Eye (Info)</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => onNavigateTab('demo')}
