@@ -210,7 +210,33 @@
   pointer-events: none;
 }
 
-/* High-tech Custom Scrollbar */
+/* Eye Heatwave & Pulse Animation for Simple View */
+@keyframes heatwavePulse {
+  0%, 100% {
+    opacity: 0.65;
+    filter: drop-shadow(0 0 12px rgba(255, 77, 109, 0.45));
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.95;
+    filter: drop-shadow(0 0 28px rgba(255, 77, 109, 0.85)) drop-shadow(0 0 16px rgba(255, 138, 61, 0.7));
+    transform: scale(1.008);
+  }
+}
+
+.animate-heatwave {
+  animation: heatwavePulse 2.8s ease-in-out infinite;
+}
+
+@keyframes scanlinePulse {
+  0% { transform: translateY(-100%); opacity: 0; }
+  50% { opacity: 0.7; }
+  100% { transform: translateY(100%); opacity: 0; }
+}
+
+.animate-scanline {
+  animation: scanlinePulse 3.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
