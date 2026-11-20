@@ -391,13 +391,23 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
         formData.append('device_id', String(selectedDeviceId));
       }
 
-      await captureDeviceEyeImage(formData);
+      const createdRecord = await captureDeviceEyeImage(formData);
       stopCamera();
       retakeFrame();
       await loadStats();
-      await loadQueue();
+      const items = await getDoctorQueue('PENDING_REVIEW');
+      setQueue(items);
       setPortalTab('queue');
       setStatusFilter('PENDING_REVIEW');
+      const targetId = (createdRecord as any)?.record_id || createdRecord?.id;
+      if (targetId) {
+        const found = items.find((i: DoctorQueueItem) => i.record_id === targetId || i.id === targetId);
+        if (found) {
+          setSelectedCase(found);
+        } else if (items.length > 0) {
+          setSelectedCase(items[0]);
+        }
+      }
     } catch (err: any) {
       setCaptureError(err.message || 'AI Retinal Analysis failed. Please try again.');
     } finally {
@@ -525,7 +535,7 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
           }`}
         >
           <Camera className="w-4 h-4" />
-          <span>Machine & Live Capture</span>
+          <span>📷 Machine Capture</span>
           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-500/20 text-sky-300 border border-sky-400/30">
             Direct Fundus Cam
           </span>
@@ -1643,7 +1653,7 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
                       className="px-6 py-3 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-xs sm:text-sm flex items-center space-x-2 shadow-lg shadow-sky-500/25 transition-all active:scale-95"
                     >
                       <Camera className="w-4 h-4" />
-                      <span>Capture Eye Frame</span>
+                      <span>Capture Eye Image</span>
                     </button>
                   )}
 
@@ -1654,7 +1664,7 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
                       className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs flex items-center space-x-1.5 transition-colors"
                     >
                       <RotateCcw className="w-3.5 h-3.5" />
-                      <span>Retake Frame</span>
+                      <span>Retake</span>
                     </button>
                   )}
                 </div>
@@ -1667,7 +1677,7 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({
                     className="w-full sm:w-auto px-7 py-3 rounded-xl bg-gradient-to-r from-amber-400 to-amber-300 hover:from-amber-300 hover:to-amber-200 text-slate-950 font-black text-xs sm:text-sm flex items-center justify-center space-x-2 shadow-lg shadow-amber-400/25 transition-all active:scale-95 disabled:opacity-50"
                   >
                     <Sparkles className="w-4 h-4 text-slate-950" />
-                    <span>Run AI Screening & Analyze →</span>
+                    <span>Run AI Analysis →</span>
                   </button>
                 )}
               </div>
